@@ -42,5 +42,11 @@ async def google_callback(code: str, state: str, db: AsyncSession = Depends(get_
     )
     db.add(google_account)
     await db.commit()
+    await db.refresh(google_account)
 
-    return RedirectResponse("http://localhost:3000/settings?google_connected=true")
+    return {
+    "message": "Google account connected successfully!",
+    "google_account_id": str(google_account.id),
+    "google_email": google_account.google_email,
+    "status": "success"
+}

@@ -1,11 +1,24 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import google ,auth_google , auth
 
-# Import des routers
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, desc
+from uuid import UUID   # ← Ajoute cette ligne
+
+from app.core.database import get_db
+from app.utils.auth import get_current_user
+from app.models.user import User
+from app.models.site import Site
+from app.models.seo_metric import SeoMetric
+from app.schemas.seo_metric import SeoMetricCreate, SeoMetricRead
+
+
 from app.routers.auth import router as auth_router
+from app.routers.google import router as google_router
 
-
+from app.routers.site import router as site_router
+from app.routers.analytics import router as analytics_router
 
 
 app = FastAPI(
@@ -14,13 +27,6 @@ app = FastAPI(
     version="0.1.0",
     docs_url="/docs"
 )
-
-app.include_router(google.router)
-app.include_router(auth.router)
-app.include_router(auth_google.router)
-
-
-
 
 # CORS
 app.add_middleware(
@@ -31,6 +37,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Inclusion des routers
+app.include_router(auth_router)
+app.include_router(google_router)
+# app.include_router(auth_google_router)   # décommente si nécessaire
+app.include_router(site_router)
+app.include_router(analytics_router)
 
 @app.get("/")
 async def root():
@@ -42,6 +54,3 @@ async def root():
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
-
-
-

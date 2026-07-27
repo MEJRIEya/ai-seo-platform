@@ -8,8 +8,10 @@ class SiteBase(BaseModel):
     gsc_property_url: str
     ga4_property_id: Optional[str] = None
 
-class SiteCreate(SiteBase):
-    user_id: UUID
+class SiteCreate(BaseModel):
+    domain: str
+    gsc_property_url: str
+    ga4_property_id: Optional[str] = None
     google_account_id: UUID
 
 class SiteRead(SiteBase):
