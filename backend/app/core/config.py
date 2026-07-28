@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
 class Settings(BaseSettings):
     # Application
     PROJECT_NAME: str = "AI SEO Platform"
@@ -17,12 +18,12 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:password@localhost:5432/aiseo")
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-        extra = "ignore"   # ← Ceci est la correction importante
-    
-     # Redis
+    # xAI
+    XAI_API_KEY: str
+    XAI_BASE_URL: str = "https://api.x.ai/v1"
+    XAI_MODEL: str = "grok-4.3"  # vérifie le modèle dispo sur ton compte
+
+    # Redis
     REDIS_URL: str
 
     # Google OAuth
@@ -30,11 +31,19 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str
     GOOGLE_REDIRECT_URI: str
     GOOGLE_LOGIN_REDIRECT_URI: str
+
+    # SMTP
     SMTP_HOST: str
     SMTP_PORT: int
     SMTP_USER: str
     SMTP_PASSWORD: str
+
     FRONTEND_URL: str
+
+    class Config:
+        env_file = ".env"
+        case_sensitive = True
+        extra = "ignore"
 
 
 settings = Settings()

@@ -19,6 +19,7 @@ from app.routers.google import router as google_router
 
 from app.routers.site import router as site_router
 from app.routers.analytics import router as analytics_router
+from app.routers import recommendations 
 
 
 app = FastAPI(
@@ -37,12 +38,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Inclusion des routers
+
 app.include_router(auth_router)
 app.include_router(google_router)
-# app.include_router(auth_google_router)   # décommente si nécessaire
+# app.include_router(auth_google_router)   
 app.include_router(site_router)
 app.include_router(analytics_router)
+app.include_router(recommendations.router)
 
 @app.get("/")
 async def root():
