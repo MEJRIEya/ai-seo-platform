@@ -18,11 +18,14 @@ SEUILS = {
 }
 
 
-def _classer(metrique: str, valeur: float) -> str:
+def _classer(metrique: str, valeur) -> str:
     """Classe une valeur p75 en 'good' / 'needs_improvement' / 'poor'."""
     seuils = SEUILS.get(metrique)
     if not seuils:
         return "unknown"
+
+    valeur = float(valeur)  # CrUX renvoie parfois le CLS sous forme de string ("0.05")
+
     if valeur <= seuils["good"]:
         return "good"
     if valeur <= seuils["needs_improvement"]:
@@ -31,20 +34,28 @@ def _classer(metrique: str, valeur: float) -> str:
 
 
 def _appeler_crux(payload: dict) -> dict | None:
-    """Appelle l'API CrUX avec le payload donné. Retourne None si pas de données (404)."""
-    response = requests.post(
-        CRUX_ENDPOINT,
-        params={"key": settings.CRUX_API_KEY},
-        json=payload,
-        timeout=10,
-    )
+    """Appelle l'API CrUX avec le payload donné. Retourne None si pas de données (404 ou erreur)."""
+    try:
+        response = requests.post(
+            CRUX_ENDPOINT,
+            params={"key": settings.CRUX_API_KEY},
+            json=payload,
+            timeout=10,
+        )
 
-    if response.status_code == 404:
-        # Pas assez de trafic Chrome réel pour cette URL/origine sur les 28 derniers jours
+        if response.status_code == 404:
+            # Pas assez de trafic Chrome réel pour cette URL/origine sur les 28 derniers jours
+            return None
+
+        if response.status_code == 400:
+            # URL/origine mal formée (souvent une URL relative ou invalide) -> on l'ignore
+            return None
+
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as exc:
+        print(f"Erreur lors de l'appel CrUX pour {payload}: {exc}")
         return None
-
-    response.raise_for_status()
-    return response.json()
 
 
 def _extraire_metrics(record: dict, niveau: str) -> dict:
@@ -62,7 +73,7 @@ def _extraire_metrics(record: dict, niveau: str) -> dict:
     for cle_crux, cle_courte in mapping.items():
         donnees = metrics.get(cle_crux)
         if donnees and "percentiles" in donnees:
-            valeur_p75 = donnees["percentiles"]["p75"]
+            valeur_p75 = float(donnees["percentiles"]["p75"])
             resultat[cle_courte] = valeur_p75
             resultat[f"{cle_courte}_categorie"] = _classer(cle_crux, valeur_p75)
         else:
@@ -74,15 +85,18 @@ def _extraire_metrics(record: dict, niveau: str) -> dict:
 
 def obtenir_core_web_vitals(url: str, form_factor: str | None = None) -> dict | None:
     """
-    Récupère les Core Web Vitals pour une URL précise.
+    Récupère les Core Web Vitals pour une URL précise, avec 3 niveaux de fallback :
 
-    Si l'URL n'a pas assez de données réelles (cas fréquent sur les pages
-    à faible trafic), on retente automatiquement au niveau de l'origine
-    (le domaine entier), qui a généralement plus de volume.
+    1. CrUX au niveau de la page précise (données réelles, le plus précis)
+    2. CrUX au niveau de l'origine/domaine (données réelles, moins précis mais
+       plus de volume disponible)
+    3. PageSpeed Insights / Lighthouse (test synthétique en labo, fonctionne
+       même sans aucun trafic réel, mais moins représentatif de l'expérience
+       utilisateur réelle)
 
     form_factor: "PHONE", "DESKTOP", "TABLET", ou None pour tous appareils confondus.
 
-    Retourne None si aucune donnée n'est disponible ni pour la page ni pour l'origine.
+    Retourne None seulement si les 3 niveaux échouent (cas rare, ex: site injoignable).
     """
     payload = {"url": url}
     if form_factor:
@@ -92,7 +106,7 @@ def obtenir_core_web_vitals(url: str, form_factor: str | None = None) -> dict | 
     if record is not None:
         return _extraire_metrics(record, niveau="page")
 
-    # ---- Fallback : essai au niveau de l'origine ----
+    # ---- Fallback 1 : essai au niveau de l'origine ----
     from urllib.parse import urlparse
     parsed = urlparse(url)
     origin = f"{parsed.scheme}://{parsed.netloc}"
@@ -105,4 +119,7 @@ def obtenir_core_web_vitals(url: str, form_factor: str | None = None) -> dict | 
     if record_origin is not None:
         return _extraire_metrics(record_origin, niveau="origin")
 
-    return None
+    # ---- Fallback 2 : PageSpeed Insights (test en labo, pas de données réelles) ----
+    from app.services.psi_service import obtenir_core_web_vitals_labo
+    strategy = "mobile" if form_factor != "DESKTOP" else "desktop"
+    return obtenir_core_web_vitals_labo(url, strategy=strategy)

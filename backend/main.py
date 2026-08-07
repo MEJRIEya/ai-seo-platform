@@ -21,14 +21,14 @@ from app.models.user import User
 from app.models.site import Site
 from app.models.seo_metric import SeoMetric
 from app.schemas.seo_metric import SeoMetricCreate, SeoMetricRead
-
+from app.routers import recommendations
+from app.routers.core_web_vitals import router as core_web_vitals_router
 
 from app.routers.auth import router as auth_router
 from app.routers.google import router as google_router
 
 from app.routers.site import router as site_router
 from app.routers.analytics import router as analytics_router
-from app.routers import recommendations
 
 
 app = FastAPI(
@@ -54,6 +54,8 @@ app.include_router(google_router)
 app.include_router(site_router)
 app.include_router(analytics_router)
 app.include_router(recommendations.router)
+app.include_router(core_web_vitals_router)  
+
 
 @app.get("/")
 async def root():

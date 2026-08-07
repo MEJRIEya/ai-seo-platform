@@ -16,3 +16,5 @@ celery_app.conf.update(
 )
 
 celery_app.autodiscover_tasks(["workers"])
+
+from workers import core_web_vitals_task 
