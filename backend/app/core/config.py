@@ -17,6 +17,7 @@ class Settings(BaseSettings):
 
     # Database
     DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:password@localhost:5432/aiseo")
+    DATABASE_URL_SYNC: str = os.getenv("DATABASE_URL_SYNC", "postgresql+psycopg2://postgres:password@localhost:5432/aiseo")
 
     # xAI
     XAI_API_KEY: str
@@ -31,6 +32,7 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str
     GOOGLE_REDIRECT_URI: str
     GOOGLE_LOGIN_REDIRECT_URI: str
+    CRUX_API_KEY: str
 
     # SMTP
     SMTP_HOST: str

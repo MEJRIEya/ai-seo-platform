@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.models.recommendation import Recommendation, Status
+from workers.tasks import generer_recommandations_task
 
 router = APIRouter(prefix="/api", tags=["recommendations"])
 
@@ -30,3 +31,9 @@ async def update_status(rec_id: uuid.UUID, new_status: Status, db: AsyncSession 
     await db.commit()
     await db.refresh(rec)
     return rec
+
+
+@router.post("/sites/{site_id}/recommendations/generate")
+async def trigger_recommendations(site_id: uuid.UUID):
+    generer_recommandations_task.delay(str(site_id))
+    return {"status": "tâche lancée", "site_id": str(site_id)}

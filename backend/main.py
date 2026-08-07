@@ -1,10 +1,19 @@
+import sys
+import os
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))      # .../ai-seo-platform/backend
+ROOT_DIR = os.path.dirname(BASE_DIR)                        # .../ai-seo-platform
+
+sys.path.insert(0, BASE_DIR)
+sys.path.insert(0, ROOT_DIR)
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
-from uuid import UUID   # ← Ajoute cette ligne
+from uuid import UUID
 
 from app.core.database import get_db
 from app.utils.auth import get_current_user
@@ -19,7 +28,7 @@ from app.routers.google import router as google_router
 
 from app.routers.site import router as site_router
 from app.routers.analytics import router as analytics_router
-from app.routers import recommendations 
+from app.routers import recommendations
 
 
 app = FastAPI(
@@ -41,7 +50,7 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(google_router)
-# app.include_router(auth_google_router)   
+# app.include_router(auth_google_router)
 app.include_router(site_router)
 app.include_router(analytics_router)
 app.include_router(recommendations.router)

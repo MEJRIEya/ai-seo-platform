@@ -15,4 +15,4 @@ celery_app.conf.update(
     enable_utc=True,
 )
 
-celery_app.autodiscover_tasks(["app.tasks"])
+celery_app.autodiscover_tasks(["workers"])
