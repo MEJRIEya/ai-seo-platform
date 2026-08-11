@@ -2,6 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from "recharts";
 
 interface Site {
   id: string;
@@ -10,12 +21,27 @@ interface Site {
   ga4_property_id: string | null;
 }
 
-interface GscMetric {
+interface DailyTrend {
+  date: string;
   clicks: number;
-  impressions: number;
-  position: number | null;
-  ctr: number | null;
-  keyword?: string | null;
+  sessions: number;
+}
+
+interface SiteReport {
+  site: string;
+  gsc_summary: {
+    total_clicks: number;
+    total_impressions: number;
+    avg_position: number | null;
+    avg_ctr: number | null;
+  };
+  ga4_summary: {
+    total_sessions: number;
+    total_users: number;
+    total_pageviews: number;
+  };
+  top_keywords_gsc: { keyword: string; clicks: number; position: number | null }[];
+  daily_trend: DailyTrend[];
 }
 
 export default function DashboardPage() {
@@ -23,16 +49,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [sites, setSites] = useState<Site[]>([]);
   const [selectedSite, setSelectedSite] = useState<Site | null>(null);
-  const [metrics, setMetrics] = useState({
-    clicks: 0,
-    impressions: 0,
-    avgPosition: 0,
-    avgCtr: 0,
-    keywordsCount: 0,
-  });
-  const [topKeywords, setTopKeywords] = useState<
-    { keyword: string; position: number; clicks: number }[]
-  >([]);
+  const [report, setReport] = useState<SiteReport | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -44,89 +61,18 @@ export default function DashboardPage() {
 
     const fetchData = async () => {
       try {
-        const sitesRes = await fetch("http://127.0.0.1:8000/sites/", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!sitesRes.ok) throw new Error("Impossible de récupérer les sites");
-        const sitesData: Site[] = await sitesRes.json();
+        const sitesData: Site[] = await apiFetch("/sites/");
         setSites(sitesData);
 
-        // On prend de préférence twenty.tn
         const mainSite =
           sitesData.find((s) => s.domain.includes("twenty")) || sitesData[0];
         setSelectedSite(mainSite || null);
 
         if (mainSite) {
-          const gscRes = await fetch(
-            `http://127.0.0.1:8000/analytics/sites/${mainSite.id}/gsc`,
-            {
-              headers: { Authorization: `Bearer ${token}` },
-            }
+          const reportData: SiteReport = await apiFetch(
+            `/analytics/sites/${mainSite.id}/report`
           );
-
-          if (gscRes.ok) {
-            const gscData: GscMetric[] = await gscRes.json();
-
-            const totalClicks = gscData.reduce((sum, m) => sum + (m.clicks || 0), 0);
-            const totalImpressions = gscData.reduce(
-              (sum, m) => sum + (m.impressions || 0),
-              0
-            );
-            const positions = gscData
-              .filter((m) => m.position)
-              .map((m) => m.position as number);
-            const ctrs = gscData.filter((m) => m.ctr).map((m) => m.ctr as number);
-
-            // Top keywords
-            const keywordsMap = new Map<
-              string,
-              { clicks: number; position: number }
-            >();
-
-            gscData.forEach((m) => {
-              if (m.keyword) {
-                const existing = keywordsMap.get(m.keyword) || {
-                  clicks: 0,
-                  position: m.position || 0,
-                };
-                keywordsMap.set(m.keyword, {
-                  clicks: existing.clicks + (m.clicks || 0),
-                  position: m.position || existing.position,
-                });
-              }
-            });
-
-            const sortedKeywords = Array.from(keywordsMap.entries())
-              .map(([keyword, data]) => ({
-                keyword,
-                clicks: data.clicks,
-                position: data.position,
-              }))
-              .sort((a, b) => b.clicks - a.clicks)
-              .slice(0, 5);
-
-            setTopKeywords(sortedKeywords);
-
-            setMetrics({
-              clicks: totalClicks,
-              impressions: totalImpressions,
-              avgPosition: positions.length
-                ? Number(
-                    (
-                      positions.reduce((a, b) => a + b, 0) / positions.length
-                    ).toFixed(1)
-                  )
-                : 0,
-              avgCtr: ctrs.length
-                ? Number(
-                    ((ctrs.reduce((a, b) => a + b, 0) / ctrs.length) * 100).toFixed(
-                      2
-                    )
-                  )
-                : 0,
-              keywordsCount: keywordsMap.size,
-            });
-          }
+          setReport(reportData);
         }
       } catch (err: any) {
         setError(err.message);
@@ -144,7 +90,6 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-gray-900">
@@ -156,46 +101,105 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Main Metrics */}
+      {error && (
+        <div className="bg-red-50 text-red-600 text-sm p-3 rounded-md">{error}</div>
+      )}
+
+      {/* KPI cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         <div className="bg-white rounded-lg border border-gray-200 p-5">
           <p className="text-sm text-gray-500 mb-1">Organic Clicks</p>
           <p className="text-2xl font-semibold text-gray-900">
-            {metrics.clicks.toLocaleString()}
+            {report?.gsc_summary.total_clicks.toLocaleString() ?? "-"}
           </p>
         </div>
 
         <div className="bg-white rounded-lg border border-gray-200 p-5">
           <p className="text-sm text-gray-500 mb-1">Impressions</p>
           <p className="text-2xl font-semibold text-gray-900">
-            {metrics.impressions.toLocaleString()}
-          </p>
-        </div>
-
-        <div className="bg-white rounded-lg border border-gray-200 p-5">
-          <p className="text-sm text-gray-500 mb-1">Organic Keywords</p>
-          <p className="text-2xl font-semibold text-gray-900">
-            {metrics.keywordsCount}
+            {report?.gsc_summary.total_impressions.toLocaleString() ?? "-"}
           </p>
         </div>
 
         <div className="bg-white rounded-lg border border-gray-200 p-5">
           <p className="text-sm text-gray-500 mb-1">Avg. Position</p>
           <p className="text-2xl font-semibold text-gray-900">
-            {metrics.avgPosition || "-"}
+            {report?.gsc_summary.avg_position?.toFixed(1) ?? "-"}
+          </p>
+        </div>
+
+        <div className="bg-white rounded-lg border border-gray-200 p-5">
+          <p className="text-sm text-gray-500 mb-1">Sessions (GA4)</p>
+          <p className="text-2xl font-semibold text-gray-900">
+            {report?.ga4_summary.total_sessions.toLocaleString() ?? "-"}
           </p>
         </div>
       </div>
 
-      {/* Two columns */}
+      {/* Trend chart */}
+      <div className="bg-white rounded-lg border border-gray-200 p-5">
+        <h2 className="font-medium text-gray-900 mb-4">Clicks & Sessions Trend</h2>
+        {!report || report.daily_trend.length === 0 ? (
+          <div className="text-sm text-gray-400 py-8 text-center">
+            No trend data yet
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={280}>
+            <LineChart data={report.daily_trend}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis
+                dataKey="date"
+                tick={{ fontSize: 12, fill: "#9ca3af" }}
+                tickFormatter={(value) =>
+                  new Date(value).toLocaleDateString("fr-FR", {
+                    day: "2-digit",
+                    month: "2-digit",
+                  })
+                }
+              />
+              <YAxis yAxisId="left" tick={{ fontSize: 12, fill: "#9ca3af" }} />
+              <YAxis
+                yAxisId="right"
+                orientation="right"
+                tick={{ fontSize: 12, fill: "#9ca3af" }}
+              />
+              <Tooltip
+                labelFormatter={(value) =>
+                  new Date(value).toLocaleDateString("fr-FR")
+                }
+              />
+              <Legend />
+              <Line
+                yAxisId="left"
+                type="monotone"
+                dataKey="clicks"
+                name="Clics (GSC)"
+                stroke="#2563eb"
+                strokeWidth={2}
+                dot={false}
+              />
+              <Line
+                yAxisId="right"
+                type="monotone"
+                dataKey="sessions"
+                name="Sessions (GA4)"
+                stroke="#22c55e"
+                strokeWidth={2}
+                dot={false}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+
+      {/* Two columns: Top Keywords + Sites */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        {/* Top Keywords */}
         <div className="bg-white rounded-lg border border-gray-200">
           <div className="px-5 py-4 border-b border-gray-100">
             <h2 className="font-medium text-gray-900">Top Keywords</h2>
           </div>
 
-          {topKeywords.length === 0 ? (
+          {!report || report.top_keywords_gsc.length === 0 ? (
             <div className="p-6 text-sm text-gray-400">No keyword data yet</div>
           ) : (
             <div className="divide-y divide-gray-100">
@@ -204,14 +208,14 @@ export default function DashboardPage() {
                 <span className="text-right">Position</span>
                 <span className="text-right">Clicks</span>
               </div>
-              {topKeywords.map((kw) => (
+              {report.top_keywords_gsc.map((kw) => (
                 <div
                   key={kw.keyword}
                   className="px-5 py-3 grid grid-cols-3 text-sm hover:bg-gray-50"
                 >
                   <span className="text-blue-600 truncate">{kw.keyword}</span>
                   <span className="text-right text-gray-700">
-                    {kw.position?.toFixed(1) || "-"}
+                    {kw.position?.toFixed(1) ?? "-"}
                   </span>
                   <span className="text-right text-gray-700">{kw.clicks}</span>
                 </div>
@@ -220,7 +224,6 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {/* Sites */}
         <div className="bg-white rounded-lg border border-gray-200">
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
             <h2 className="font-medium text-gray-900">Your Sites</h2>
@@ -239,17 +242,13 @@ export default function DashboardPage() {
                   className="px-5 py-3 flex items-center justify-between hover:bg-gray-50"
                 >
                   <div>
-                    <p className="text-sm font-medium text-gray-900">
-                      {site.domain}
-                    </p>
+                    <p className="text-sm font-medium text-gray-900">{site.domain}</p>
                     <p className="text-xs text-gray-500">
                       {site.gsc_property_url ? "GSC" : "No GSC"} ·{" "}
                       {site.ga4_property_id ? "GA4" : "No GA4"}
                     </p>
                   </div>
-                  <button className="text-sm text-blue-600 hover:underline">
-                    View
-                  </button>
+                  <button className="text-sm text-blue-600 hover:underline">View</button>
                 </div>
               ))}
             </div>

@@ -7,6 +7,8 @@ from app.utils.auth import get_current_user
 from app.models.user import User
 from app.models.google_account import GoogleAccount
 from app.services.google_oauth import get_authorization_url, exchange_code_for_tokens
+from sqlalchemy import select
+from app.core.database import get_db
 
 router = APIRouter(prefix="/google", tags=["Google OAuth"])
 
@@ -50,3 +52,19 @@ async def google_callback(code: str, state: str, db: AsyncSession = Depends(get_
     "google_email": google_account.google_email,
     "status": "success"
 }
+
+
+
+@router.get("/accounts")
+async def list_google_accounts(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(GoogleAccount).where(GoogleAccount.user_id == current_user.id)
+    )
+    accounts = result.scalars().all()
+    return [
+        {"id": str(acc.id), "google_email": acc.google_email, "connected_at": acc.connected_at}
+        for acc in accounts
+    ]

@@ -66,6 +66,7 @@ def generer_core_web_vitals_task(site_id: str, nb_pages: int = 10, days: int = 3
             return
 
         # 2. Appeler CrUX pour chaque page (URL complète) et stocker le résultat
+        import time
         nb_succes = 0
         for page_url, _sessions in top_pages:
             url_complete = _construire_url_complete(site.domain, page_url)
@@ -90,6 +91,10 @@ def generer_core_web_vitals_task(site_id: str, nb_pages: int = 10, days: int = 3
             )
             db.add(cwv)
             nb_succes += 1
+
+            # Petite pause pour éviter de dépasser les quotas de requêtes/seconde
+            # de CrUX et PageSpeed Insights
+            time.sleep(1)
 
         db.commit()
         print(f"Core Web Vitals mis à jour pour {nb_succes}/{len(top_pages)} page(s) du site {site_id}.")

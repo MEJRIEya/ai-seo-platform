@@ -1,4 +1,5 @@
 from celery import Celery
+from celery.schedules import crontab
 from app.core.config import settings
 
 celery_app = Celery(
@@ -15,6 +16,14 @@ celery_app.conf.update(
     enable_utc=True,
 )
 
-celery_app.autodiscover_tasks(["workers"])
+celery_app.conf.beat_schedule = {
+    "refresh-all-sites-weekly": {
+        "task": "app.tasks.analytics.refresh_all_sites_data",
+        "schedule": crontab(day_of_week=1, hour=3, minute=0),
+    },
+}
 
-from workers import core_web_vitals_task 
+# Import explicite des modules de tâches, pour que Celery les enregistre correctement
+import app.tasks.recommendations
+import app.tasks.analytics
+import app.tasks.core_web_vitals

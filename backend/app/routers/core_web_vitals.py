@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.models.core_web_vital import CoreWebVital
-from workers.core_web_vitals_task import generer_core_web_vitals_task
+from app.tasks.core_web_vitals import generer_core_web_vitals_task
 
 router = APIRouter(prefix="/api", tags=["core-web-vitals"])
 
@@ -15,7 +15,6 @@ async def get_core_web_vitals(site_id: uuid.UUID, db: AsyncSession = Depends(get
     """
     Retourne la dernière mesure Core Web Vitals connue pour chaque page du site.
     """
-    # Sous-requête : dernière date de mesure par page
     sous_requete = (
         select(
             CoreWebVital.page_url,
