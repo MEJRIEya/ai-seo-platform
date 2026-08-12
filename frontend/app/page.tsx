@@ -44,16 +44,16 @@ export default function HomePage() {
         <div className="absolute inset-0 bg-gradient-to-br from-orange-50 via-white to-blue-50" />
         <div className="relative max-w-7xl mx-auto px-6 pt-20 pb-24 text-center">
           <div className="inline-flex items-center gap-2 bg-orange-100 text-orange-700 text-xs font-semibold px-3 py-1 rounded-full mb-6">
-            the first SEO plateform with AI-powered recommendations in Tunisia
+            SEO + GA4 + Search Console + AI
           </div>
           <h1 className="text-4xl md:text-6xl font-bold tracking-tight text-gray-900 max-w-4xl mx-auto leading-tight">
             Be found in search.{" "}
             <span className="text-orange-500">Get recommended by AI.</span>
           </h1>
           <p className="mt-6 text-lg text-gray-600 max-w-2xl mx-auto">
-            Connect Google Search Console & Analytics, track positions, audit
-            Core Web Vitals, and get AI-powered recommendations to grow your
-            organic visibility.
+            Connect Google Search Console & Analytics, track positions, generate
+            detailed reports, audit Core Web Vitals, and get AI-powered
+            recommendations to grow your organic visibility.
           </p>
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link
@@ -101,8 +101,8 @@ export default function HomePage() {
             Everything you need to grow organic visibility
           </h2>
           <p className="mt-4 text-gray-600 max-w-2xl mx-auto">
-            One platform for Search Console, Analytics, rankings, technical
-            health and AI-driven actions.
+            One platform for Search Console, Analytics, rankings, detailed
+            reports, technical health and AI-driven actions.
           </p>
         </div>
 
@@ -122,6 +122,11 @@ export default function HomePage() {
               title: "Site Performance",
               desc: "Unified dashboard for GSC & GA4: traffic, top pages, trends and organic performance.",
               icon: "📊",
+            },
+            {
+              title: "Detailed Reports",
+              desc: "Full reports combining Search Console and Analytics: daily trends, top keywords, top pages and traffic insights in one place.",
+              icon: "📋",
             },
             {
               title: "Site Audit",
@@ -248,7 +253,7 @@ export default function HomePage() {
             {
               step: "02",
               title: "Import & analyze",
-              desc: "Pull rankings, clicks, sessions and Core Web Vitals. See the full picture of your organic performance.",
+              desc: "Pull rankings, clicks, sessions and Core Web Vitals. Generate detailed reports from your real data.",
             },
             {
               step: "03",
@@ -276,8 +281,8 @@ export default function HomePage() {
             Ready to grow your organic visibility?
           </h2>
           <p className="mt-4 text-orange-100 max-w-xl mx-auto">
-            Connect your data, track positions, and let AI tell you what to do
-            next.
+            Connect your data, track positions, get detailed reports, and let AI
+            tell you what to do next.
           </p>
           <Link
             href="/auth/register"
