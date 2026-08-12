@@ -26,12 +26,11 @@ interface KeywordRow {
   clicks: number;
   impressions: number;
   ctr: number;
-  trend: "up" | "down" | "stable" | "new";
 }
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 25;
 
-export default function PositionTrackingPage() {
+export default function KeywordOverviewPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [sites, setSites] = useState<Site[]>([]);
@@ -40,8 +39,10 @@ export default function PositionTrackingPage() {
   const [metricsLoading, setMetricsLoading] = useState(false);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
-  const [sortBy, setSortBy] = useState<"position" | "clicks" | "impressions">("position");
+  const [sortBy, setSortBy] = useState<"clicks" | "impressions" | "position" | "ctr">("clicks");
   const [currentPage, setCurrentPage] = useState(1);
+  const [minPosition, setMinPosition] = useState("");
+  const [maxPosition, setMaxPosition] = useState("");
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -89,7 +90,7 @@ export default function PositionTrackingPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, sortBy, selectedSiteId]);
+  }, [search, sortBy, selectedSiteId, minPosition, maxPosition]);
 
   const keywordRows: KeywordRow[] = useMemo(() => {
     const map = new Map<
@@ -100,7 +101,6 @@ export default function PositionTrackingPage() {
         positions: number[];
         clicks: number;
         impressions: number;
-        lastPosition: number;
       }
     >();
 
@@ -116,15 +116,11 @@ export default function PositionTrackingPage() {
           positions: m.position ? [m.position] : [],
           clicks: m.clicks || 0,
           impressions: m.impressions || 0,
-          lastPosition: m.position || 0,
         });
       } else {
         existing.clicks += m.clicks || 0;
         existing.impressions += m.impressions || 0;
-        if (m.position) {
-          existing.positions.push(m.position);
-          existing.lastPosition = m.position;
-        }
+        if (m.position) existing.positions.push(m.position);
       }
     }
 
@@ -132,17 +128,7 @@ export default function PositionTrackingPage() {
       const avgPos =
         item.positions.length > 0
           ? item.positions.reduce((a, b) => a + b, 0) / item.positions.length
-          : item.lastPosition;
-
-      let trend: KeywordRow["trend"] = "stable";
-      if (item.positions.length >= 2) {
-        const first = item.positions[0];
-        const last = item.positions[item.positions.length - 1];
-        if (last < first - 0.5) trend = "up";
-        else if (last > first + 0.5) trend = "down";
-      } else {
-        trend = "new";
-      }
+          : 0;
 
       return {
         keyword: item.keyword,
@@ -151,7 +137,6 @@ export default function PositionTrackingPage() {
         clicks: item.clicks,
         impressions: item.impressions,
         ctr: item.impressions > 0 ? item.clicks / item.impressions : 0,
-        trend,
       };
     });
   }, [metrics]);
@@ -168,14 +153,25 @@ export default function PositionTrackingPage() {
       );
     }
 
+    const minPos = minPosition ? parseFloat(minPosition) : null;
+    const maxPos = maxPosition ? parseFloat(maxPosition) : null;
+
+    if (minPos !== null && !isNaN(minPos)) {
+      rows = rows.filter((r) => r.position >= minPos);
+    }
+    if (maxPos !== null && !isNaN(maxPos)) {
+      rows = rows.filter((r) => r.position > 0 && r.position <= maxPos);
+    }
+
     rows.sort((a, b) => {
-      if (sortBy === "position") return a.position - b.position;
       if (sortBy === "clicks") return b.clicks - a.clicks;
-      return b.impressions - a.impressions;
+      if (sortBy === "impressions") return b.impressions - a.impressions;
+      if (sortBy === "position") return a.position - b.position;
+      return b.ctr - a.ctr;
     });
 
     return rows;
-  }, [keywordRows, search, sortBy]);
+  }, [keywordRows, search, sortBy, minPosition, maxPosition]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
 
@@ -185,11 +181,23 @@ export default function PositionTrackingPage() {
   }, [filtered, currentPage]);
 
   const stats = useMemo(() => {
-    const top3 = keywordRows.filter((r) => r.position > 0 && r.position <= 3).length;
-    const top10 = keywordRows.filter((r) => r.position > 0 && r.position <= 10).length;
-    const top20 = keywordRows.filter((r) => r.position > 0 && r.position <= 20).length;
-    const top100 = keywordRows.filter((r) => r.position > 0 && r.position <= 100).length;
-    return { top3, top10, top20, top100, total: keywordRows.length };
+    const totalClicks = keywordRows.reduce((s, r) => s + r.clicks, 0);
+    const totalImpressions = keywordRows.reduce((s, r) => s + r.impressions, 0);
+    const withPos = keywordRows.filter((r) => r.position > 0);
+    const avgPos =
+      withPos.length > 0
+        ? withPos.reduce((s, r) => s + r.position, 0) / withPos.length
+        : 0;
+    const avgCtr =
+      totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0;
+
+    return {
+      total: keywordRows.length,
+      totalClicks,
+      totalImpressions,
+      avgPos: Number(avgPos.toFixed(1)),
+      avgCtr: Number(avgCtr.toFixed(2)),
+    };
   }, [keywordRows]);
 
   const visiblePages = useMemo(() => {
@@ -206,15 +214,13 @@ export default function PositionTrackingPage() {
     return <div className="text-gray-500">Loading...</div>;
   }
 
-  const selectedSite = sites.find((s) => s.id === selectedSiteId);
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Position Tracking</h1>
+          <h1 className="text-xl font-semibold text-gray-900">Keyword Overview</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            Suivi des positions dans le temps · Top 3 / 10 / 20 / 100 · Tendances
+            Performance des mots-clés · Clics, impressions, CTR · Filtres par position
           </p>
         </div>
 
@@ -245,23 +251,33 @@ export default function PositionTrackingPage() {
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <div className="bg-white rounded-lg border border-gray-200 p-5">
               <p className="text-sm text-gray-500 mb-1">Keywords</p>
-              <p className="text-2xl font-semibold text-gray-900">{stats.total}</p>
+              <p className="text-2xl font-semibold text-gray-900">
+                {stats.total.toLocaleString()}
+              </p>
             </div>
             <div className="bg-white rounded-lg border border-gray-200 p-5">
-              <p className="text-sm text-gray-500 mb-1">Top 3</p>
-              <p className="text-2xl font-semibold text-gray-900">{stats.top3}</p>
+              <p className="text-sm text-gray-500 mb-1">Total Clicks</p>
+              <p className="text-2xl font-semibold text-gray-900">
+                {stats.totalClicks.toLocaleString()}
+              </p>
             </div>
             <div className="bg-white rounded-lg border border-gray-200 p-5">
-              <p className="text-sm text-gray-500 mb-1">Top 10</p>
-              <p className="text-2xl font-semibold text-gray-900">{stats.top10}</p>
+              <p className="text-sm text-gray-500 mb-1">Impressions</p>
+              <p className="text-2xl font-semibold text-gray-900">
+                {stats.totalImpressions.toLocaleString()}
+              </p>
             </div>
             <div className="bg-white rounded-lg border border-gray-200 p-5">
-              <p className="text-sm text-gray-500 mb-1">Top 20</p>
-              <p className="text-2xl font-semibold text-gray-900">{stats.top20}</p>
+              <p className="text-sm text-gray-500 mb-1">Avg. Position</p>
+              <p className="text-2xl font-semibold text-gray-900">
+                {stats.avgPos || "-"}
+              </p>
             </div>
             <div className="bg-white rounded-lg border border-gray-200 p-5">
-              <p className="text-sm text-gray-500 mb-1">Top 100</p>
-              <p className="text-2xl font-semibold text-gray-900">{stats.top100}</p>
+              <p className="text-sm text-gray-500 mb-1">Avg. CTR</p>
+              <p className="text-2xl font-semibold text-gray-900">
+                {stats.avgCtr ? `${stats.avgCtr}%` : "-"}
+              </p>
             </div>
           </div>
 
@@ -270,19 +286,36 @@ export default function PositionTrackingPage() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Rechercher un mot-clé ou une page..."
-              className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white min-w-[260px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Rechercher un mot-clé..."
+              className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white min-w-[220px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <input
+              type="number"
+              value={minPosition}
+              onChange={(e) => setMinPosition(e.target.value)}
+              placeholder="Pos. min"
+              className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white w-28 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <input
+              type="number"
+              value={maxPosition}
+              onChange={(e) => setMaxPosition(e.target.value)}
+              placeholder="Pos. max"
+              className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white w-28 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <select
               value={sortBy}
               onChange={(e) =>
-                setSortBy(e.target.value as "position" | "clicks" | "impressions")
+                setSortBy(
+                  e.target.value as "clicks" | "impressions" | "position" | "ctr"
+                )
               }
               className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white text-gray-700"
             >
-              <option value="position">Trier par position</option>
               <option value="clicks">Trier par clics</option>
               <option value="impressions">Trier par impressions</option>
+              <option value="position">Trier par position</option>
+              <option value="ctr">Trier par CTR</option>
             </select>
           </div>
 
@@ -292,8 +325,8 @@ export default function PositionTrackingPage() {
             ) : filtered.length === 0 ? (
               <div className="p-10 text-center text-gray-400 text-sm">
                 {keywordRows.length === 0
-                  ? `Aucune donnée pour ${selectedSite?.domain || "ce site"}. Importez d'abord les données GSC.`
-                  : "Aucun résultat pour cette recherche."}
+                  ? "Aucune donnée de mots-clés. Importez d'abord les données GSC."
+                  : "Aucun résultat pour ces filtres."}
               </div>
             ) : (
               <>
@@ -306,7 +339,6 @@ export default function PositionTrackingPage() {
                       <th className="text-right px-5 py-3">Clicks</th>
                       <th className="text-right px-5 py-3">Impressions</th>
                       <th className="text-right px-5 py-3">CTR</th>
-                      <th className="text-center px-5 py-3">Trend</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -329,20 +361,6 @@ export default function PositionTrackingPage() {
                         </td>
                         <td className="px-5 py-3 text-right text-gray-700">
                           {(row.ctr * 100).toFixed(2)}%
-                        </td>
-                        <td className="px-5 py-3 text-center">
-                          {row.trend === "up" && (
-                            <span className="text-green-600 text-xs font-medium">↑ Up</span>
-                          )}
-                          {row.trend === "down" && (
-                            <span className="text-red-500 text-xs font-medium">↓ Down</span>
-                          )}
-                          {row.trend === "stable" && (
-                            <span className="text-gray-400 text-xs">→ Stable</span>
-                          )}
-                          {row.trend === "new" && (
-                            <span className="text-blue-500 text-xs font-medium">New</span>
-                          )}
                         </td>
                       </tr>
                     ))}

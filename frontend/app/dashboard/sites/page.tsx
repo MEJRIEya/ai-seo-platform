@@ -9,43 +9,54 @@ interface Site {
   domain: string;
   gsc_property_url: string | null;
   ga4_property_id: string | null;
+  google_account_id: string | null;
   created_at: string;
 }
 
 interface GoogleAccount {
   id: string;
   google_email: string;
+  connected_at: string;
 }
 
 export default function SitesPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [sites, setSites] = useState<Site[]>([]);
-  const [accounts, setAccounts] = useState<GoogleAccount[]>([]);
-  const [showModal, setShowModal] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [googleAccounts, setGoogleAccounts] = useState<GoogleAccount[]>([]);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
-  const [form, setForm] = useState({
-    domain: "",
-    gsc_property_url: "",
-    ga4_property_id: "",
-    google_account_id: "",
-  });
+  // Modal ajout
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [domain, setDomain] = useState("");
+  const [gscPropertyUrl, setGscPropertyUrl] = useState("");
+  const [ga4PropertyId, setGa4PropertyId] = useState("");
+  const [googleAccountId, setGoogleAccountId] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const loadData = async () => {
+  // Suppression
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const fetchSites = async () => {
     try {
-      const sitesData = await apiFetch("/sites/");
-      const accountsData = await apiFetch("/google/accounts");
-      setSites(sitesData);
-      setAccounts(accountsData);
-      if (accountsData.length > 0) {
-        setForm((f) => ({ ...f, google_account_id: accountsData[0].id }));
-      }
+      const data: Site[] = await apiFetch("/sites/");
+      setSites(data);
     } catch (err: any) {
       setError(err.message);
-    } finally {
-      setLoading(false);
+    }
+  };
+
+  const fetchGoogleAccounts = async () => {
+    try {
+      // Adapte si ton endpoint est différent
+      const data: GoogleAccount[] = await apiFetch("/google/accounts").catch(() => []);
+      setGoogleAccounts(data);
+      if (data.length > 0 && !googleAccountId) {
+        setGoogleAccountId(data[0].id);
+      }
+    } catch {
+      setGoogleAccounts([]);
     }
   };
 
@@ -55,26 +66,35 @@ export default function SitesPage() {
       router.push("/auth/login");
       return;
     }
-    loadData();
+
+    Promise.all([fetchSites(), fetchGoogleAccounts()]).finally(() =>
+      setLoading(false)
+    );
   }, [router]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleAddSite = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     setError("");
+    setSuccess("");
+
     try {
       await apiFetch("/sites/", {
         method: "POST",
         body: JSON.stringify({
-          domain: form.domain,
-          gsc_property_url: form.gsc_property_url,
-          ga4_property_id: form.ga4_property_id || null,
-          google_account_id: form.google_account_id,
+          domain: domain.trim(),
+          gsc_property_url: gscPropertyUrl.trim() || null,
+          ga4_property_id: ga4PropertyId.trim() || null,
+          google_account_id: googleAccountId || null,
         }),
       });
-      setShowModal(false);
-      setForm((f) => ({ ...f, domain: "", gsc_property_url: "", ga4_property_id: "" }));
-      await loadData();
+
+      setSuccess("Site ajouté avec succès");
+      setShowAddModal(false);
+      setDomain("");
+      setGscPropertyUrl("");
+      setGa4PropertyId("");
+      await fetchSites();
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -83,13 +103,24 @@ export default function SitesPage() {
   };
 
   const handleDelete = async (siteId: string) => {
-    if (!confirm("Supprimer ce site et toutes ses donnees associees ?")) return;
+    if (!confirm("Supprimer ce site ? Cette action est irréversible.")) return;
+
+    setDeletingId(siteId);
+    setError("");
     try {
-      await apiFetch("/sites/" + siteId, { method: "DELETE" });
-      await loadData();
+      await apiFetch(`/sites/${siteId}`, { method: "DELETE" });
+      setSites((prev) => prev.filter((s) => s.id !== siteId));
+      setSuccess("Site supprimé");
     } catch (err: any) {
       setError(err.message);
+    } finally {
+      setDeletingId(null);
     }
+  };
+
+  const handleConnectGoogle = () => {
+    // Redirige vers le flow OAuth backend
+    window.location.href = "http://127.0.0.1:8000/google/connect";
   };
 
   if (loading) {
@@ -98,163 +129,190 @@ export default function SitesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-gray-900">Sites</h1>
-        <button
-          onClick={() => setShowModal(true)}
-          disabled={accounts.length === 0}
-          className="text-sm bg-gray-900 text-white px-4 py-2 rounded-md hover:bg-gray-800 transition disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          + Add Site
-        </button>
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-gray-900">Sites</h1>
+          <p className="text-sm text-gray-500 mt-0.5">
+            Gérez vos sites et leurs connexions GSC / GA4
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleConnectGoogle}
+            className="text-sm border border-gray-300 bg-white text-gray-700 px-4 py-2 rounded-md hover:bg-gray-50 transition"
+          >
+            Connecter Google
+          </button>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="text-sm bg-gray-900 text-white px-4 py-2 rounded-md hover:bg-gray-800 transition"
+          >
+            + Ajouter un site
+          </button>
+        </div>
       </div>
 
       {error && (
         <div className="bg-red-50 text-red-600 text-sm p-3 rounded-md">{error}</div>
       )}
-
-      {accounts.length === 0 && (
-        <div className="bg-amber-50 text-amber-700 text-sm p-4 rounded-md">
-          Aucun compte Google connecte. Connectez d'abord un compte Google avant d'ajouter un site.
+      {success && (
+        <div className="bg-green-50 text-green-700 text-sm p-3 rounded-md">
+          {success}
         </div>
       )}
 
+      {/* Liste des sites */}
       <div className="bg-white rounded-lg border border-gray-200">
         {sites.length === 0 ? (
-          <div className="p-10 text-center text-gray-400">
-            Aucun site pour l'instant. Cliquez sur "+ Add Site" pour commencer.
+          <div className="p-12 text-center text-gray-400">
+            <p className="mb-1">Aucun site pour le moment</p>
+            <p className="text-sm">Ajoutez votre premier site pour commencer</p>
           </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-xs text-gray-400 font-medium border-b border-gray-100">
-                <th className="text-left px-5 py-3">Domain</th>
-                <th className="text-left px-5 py-3">GSC</th>
-                <th className="text-left px-5 py-3">GA4</th>
-                <th className="text-right px-5 py-3">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sites.map((site) => {
-                const gscBadge = site.gsc_property_url
-                  ? "bg-green-50 text-green-700"
-                  : "bg-gray-100 text-gray-500";
-                const ga4Badge = site.ga4_property_id
-                  ? "bg-green-50 text-green-700"
-                  : "bg-gray-100 text-gray-500";
-                const detailUrl = "/dashboard/performance?site=" + site.id;
+          <div className="divide-y divide-gray-100">
+            <div className="px-5 py-3 grid grid-cols-12 gap-4 text-xs font-medium text-gray-400">
+              <div className="col-span-4">Domain</div>
+              <div className="col-span-3">Search Console</div>
+              <div className="col-span-3">Google Analytics</div>
+              <div className="col-span-2 text-right">Actions</div>
+            </div>
 
-                return (
-                  <tr key={site.id} className="border-b border-gray-50 hover:bg-gray-50">
-                    <td className="px-5 py-3 font-medium text-gray-900">{site.domain}</td>
-                    <td className="px-5 py-3">
-                      <span className={"text-xs px-2 py-1 rounded-full " + gscBadge}>
-                        {site.gsc_property_url ? "Connected" : "Not set"}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3">
-                      <span className={"text-xs px-2 py-1 rounded-full " + ga4Badge}>
-                        {site.ga4_property_id ? "Connected" : "Not set"}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3 text-right space-x-3">
-                      <a href={detailUrl} className="text-blue-600 hover:underline">
-                        View
-                      </a>
-                      <button
-                        onClick={() => handleDelete(site.id)}
-                        className="text-red-600 hover:underline"
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+            {sites.map((site) => (
+              <div
+                key={site.id}
+                className="px-5 py-4 grid grid-cols-12 gap-4 items-center hover:bg-gray-50"
+              >
+                <div className="col-span-4">
+                  <p className="text-sm font-medium text-gray-900">{site.domain}</p>
+                  <p className="text-xs text-gray-400">
+                    Ajouté le{" "}
+                    {new Date(site.created_at).toLocaleDateString("fr-FR")}
+                  </p>
+                </div>
+
+                <div className="col-span-3">
+                  {site.gsc_property_url ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-50 px-2 py-1 rounded-full">
+                      <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                      Connecté
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                      Non connecté
+                    </span>
+                  )}
+                </div>
+
+                <div className="col-span-3">
+                  {site.ga4_property_id ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-50 px-2 py-1 rounded-full">
+                      <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                      Connecté
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                      Non connecté
+                    </span>
+                  )}
+                </div>
+
+                <div className="col-span-2 flex justify-end gap-2">
+                  <button
+                    onClick={() => handleDelete(site.id)}
+                    disabled={deletingId === site.id}
+                    className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded transition disabled:opacity-40"
+                  >
+                    {deletingId === site.id ? "..." : "Supprimer"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </div>
 
-      {showModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg w-full max-w-md p-6 space-y-4">
-            <h2 className="text-lg font-semibold text-gray-900">Ajouter un site</h2>
+      {/* Modal Ajouter un site */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">
+              Ajouter un site
+            </h2>
 
-            <form onSubmit={handleSubmit} className="space-y-3">
+            <form onSubmit={handleAddSite} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">
-                  Domaine
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Domaine *
                 </label>
                 <input
+                  type="text"
+                  value={domain}
+                  onChange={(e) => setDomain(e.target.value)}
                   required
-                  value={form.domain}
-                  onChange={(e) => setForm({ ...form, domain: e.target.value })}
-                  placeholder="exemple.com"
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                  placeholder="www.exemple.com"
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">
-                  Propriete Search Console
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  URL propriété GSC
                 </label>
                 <input
-                  required
-                  value={form.gsc_property_url}
-                  onChange={(e) =>
-                    setForm({ ...form, gsc_property_url: e.target.value })
-                  }
-                  placeholder="sc-domain:exemple.com"
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                  type="text"
+                  value={gscPropertyUrl}
+                  onChange={(e) => setGscPropertyUrl(e.target.value)}
+                  placeholder="https://www.exemple.com/ ou sc-domain:exemple.com"
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">
-                  ID Propriete GA4 (optionnel)
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  ID propriété GA4
                 </label>
                 <input
-                  value={form.ga4_property_id}
-                  onChange={(e) =>
-                    setForm({ ...form, ga4_property_id: e.target.value })
-                  }
+                  type="text"
+                  value={ga4PropertyId}
+                  onChange={(e) => setGa4PropertyId(e.target.value)}
                   placeholder="123456789"
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">
-                  Compte Google
-                </label>
-                <select
-                  value={form.google_account_id}
-                  onChange={(e) =>
-                    setForm({ ...form, google_account_id: e.target.value })
-                  }
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-                >
-                  {accounts.map((acc) => (
-                    <option key={acc.id} value={acc.id}>
-                      {acc.google_email || acc.id}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {googleAccounts.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Compte Google
+                  </label>
+                  <select
+                    value={googleAccountId}
+                    onChange={(e) => setGoogleAccountId(e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-white"
+                  >
+                    {googleAccounts.map((acc) => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.google_email || acc.id}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowModal(false)}
-                  className="text-sm px-4 py-2 rounded-md text-gray-600 hover:bg-gray-50"
+                  onClick={() => setShowAddModal(false)}
+                  className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 rounded-md"
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
-                  disabled={submitting}
-                  className="text-sm px-4 py-2 rounded-md bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-50"
+                  disabled={submitting || !domain.trim()}
+                  className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-800 disabled:opacity-40"
                 >
                   {submitting ? "Ajout..." : "Ajouter"}
                 </button>
