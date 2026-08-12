@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+
 export default function RegisterPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -19,11 +21,9 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/auth/register", {
+      const response = await fetch(`${API_URL}/auth/register`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email,
           password,
@@ -36,7 +36,24 @@ export default function RegisterPage() {
         throw new Error(data.detail || "Erreur lors de l'inscription");
       }
 
-      router.push("/auth/login");
+      // Auto-login après inscription
+      const formData = new URLSearchParams();
+      formData.append("username", email);
+      formData.append("password", password);
+
+      const loginRes = await fetch(`${API_URL}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: formData,
+      });
+
+      if (loginRes.ok) {
+        const data = await loginRes.json();
+        localStorage.setItem("token", data.access_token);
+        router.push("/dashboard");
+      } else {
+        router.push("/auth/login");
+      }
     } catch (err: any) {
       setError(err.message || "Une erreur est survenue");
     } finally {
@@ -44,12 +61,16 @@ export default function RegisterPage() {
     }
   };
 
+  const handleGoogleLogin = () => {
+    window.location.href = `${API_URL}/auth/google/login`;
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4">
       <div className="mb-10 text-center">
-        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+        <Link href="/" className="text-2xl font-bold text-gray-900 tracking-tight">
           AI SEO Platform
-        </h1>
+        </Link>
       </div>
 
       <div className="w-full max-w-[420px]">
@@ -57,9 +78,9 @@ export default function RegisterPage() {
           Create your account
         </h2>
 
-        {/* Google Button */}
         <button
           type="button"
+          onClick={handleGoogleLogin}
           className="w-full flex items-center justify-center gap-3 py-2.5 px-4 border border-gray-300 rounded-lg bg-white hover:bg-gray-50 transition mb-6 shadow-sm"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -73,11 +94,10 @@ export default function RegisterPage() {
           </span>
         </button>
 
-        {/* Divider */}
         <div className="flex items-center gap-4 mb-6">
-          <div className="flex-1 h-px bg-gray-200"></div>
+          <div className="flex-1 h-px bg-gray-200" />
           <span className="text-sm text-gray-400">or</span>
-          <div className="flex-1 h-px bg-gray-200"></div>
+          <div className="flex-1 h-px bg-gray-200" />
         </div>
 
         {error && (
@@ -87,7 +107,6 @@ export default function RegisterPage() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Email Field */}
           <div className="relative">
             <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400">
               ✉
@@ -103,7 +122,6 @@ export default function RegisterPage() {
             />
           </div>
 
-          {/* Password Field with smooth transition */}
           <div
             className={`transition-all duration-300 ease-in-out overflow-hidden ${
               showPasswordField
@@ -144,13 +162,8 @@ export default function RegisterPage() {
 
         <p className="mt-6 text-sm text-gray-500 text-center">
           By creating your account, you agree to the{" "}
-          <Link href="#" className="text-blue-600 hover:underline">
-            Terms of Service
-          </Link>{" "}
-          and{" "}
-          <Link href="#" className="text-blue-600 hover:underline">
-            Privacy Policy
-          </Link>
+          <span className="text-blue-600">Terms of Service</span> and{" "}
+          <span className="text-blue-600">Privacy Policy</span>
         </p>
 
         <p className="mt-8 text-center text-sm text-gray-600">

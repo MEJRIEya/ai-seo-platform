@@ -29,6 +29,8 @@ from app.routers.google import router as google_router
 
 from app.routers.site import router as site_router
 from app.routers.analytics import router as analytics_router
+from app.routers import auth_google
+from app.routers.auth_google import router as auth_google_router  
 
 
 app = FastAPI(
@@ -55,6 +57,10 @@ app.include_router(site_router)
 app.include_router(analytics_router)
 app.include_router(recommendations.router)
 app.include_router(core_web_vitals_router)  
+app.include_router(auth_google.router)
+
+
+
 
 
 @app.get("/")

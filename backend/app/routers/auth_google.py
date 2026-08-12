@@ -10,9 +10,11 @@ from app.models.user import User
 from app.services.google_oauth import get_login_authorization_url, exchange_login_code
 from app.utils.security import create_access_token
 
-router = APIRouter(prefix="/auth/google", tags=["Connexion Google"])
 
 redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
+
+
+router = APIRouter(prefix="/auth/google", tags=["Auth Google"])
 
 
 @router.get("/login")
