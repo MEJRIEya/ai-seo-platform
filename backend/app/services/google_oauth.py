@@ -8,6 +8,7 @@ from google.auth.transport import requests as google_requests
 SCOPES = [
     "openid",
     "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.profile",
     "https://www.googleapis.com/auth/analytics.readonly",
     "https://www.googleapis.com/auth/webmasters.readonly",
 ]
@@ -55,11 +56,22 @@ def exchange_code_for_tokens(code: str, state: str) -> dict:
     if expires_at is not None and expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
 
+    email = ""
+    if creds.id_token:
+        try:
+            id_info = google_id_token.verify_oauth2_token(
+                creds.id_token, google_requests.Request(), settings.GOOGLE_CLIENT_ID
+            )
+            email = id_info.get("email", "")
+        except Exception:
+            pass
+
     return {
         "access_token": creds.token,
         "refresh_token": creds.refresh_token,
-        "scopes": creds.scopes or SCOPES,  # fallback si Google ne renvoie rien
+        "scopes": creds.scopes or SCOPES,
         "expires_at": expires_at,
+        "email": email,
     }
 
 LOGIN_SCOPES = ["openid", "https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"]

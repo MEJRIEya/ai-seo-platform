@@ -57,9 +57,9 @@ export default function DashboardLayout({
   const router = useRouter();
 
   return (
-    <div className="min-h-screen flex bg-[#f4f5f7]">
+    <div className="h-screen flex bg-[#f4f5f7] overflow-hidden">
       {/* Sidebar */}
-      <aside className="w-[240px] bg-white border-r border-gray-200 flex flex-col">
+      <aside className="w-[240px] bg-white border-r border-gray-200 flex flex-col h-full flex-shrink-0">
         {/* Logo */}
         <div className="h-14 flex items-center px-5 border-b border-gray-100">
           <span className="font-bold text-gray-900 text-lg tracking-tight">

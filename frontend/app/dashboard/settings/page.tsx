@@ -15,23 +15,22 @@ interface User {
 interface GoogleAccount {
   id: string;
   google_email: string;
-  scopes?: string;
-  created_at?: string;
 }
+
+const ACCOUNTS_PER_PAGE = 5;
 
 export default function SettingsPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
   const [accounts, setAccounts] = useState<GoogleAccount[]>([]);
+  const [page, setPage] = useState(1);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  // Profil
   const [fullName, setFullName] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
 
-  // Mot de passe
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -46,12 +45,12 @@ export default function SettingsPage() {
 
     const load = async () => {
       try {
-        const me: User = await apiFetch("/auth/me");
+        const me = await apiFetch("/auth/me");
         setUser(me);
         setFullName(me.full_name || "");
 
         try {
-          const googleAccounts: GoogleAccount[] = await apiFetch("/google/accounts");
+          const googleAccounts = await apiFetch("/google/accounts");
           setAccounts(googleAccounts);
         } catch {
           setAccounts([]);
@@ -71,14 +70,13 @@ export default function SettingsPage() {
     setSavingProfile(true);
     setError("");
     setSuccess("");
-
     try {
-      const updated: User = await apiFetch("/auth/me", {
+      const updated = await apiFetch("/auth/me", {
         method: "PATCH",
         body: JSON.stringify({ full_name: fullName }),
       });
       setUser(updated);
-      setSuccess("Profil mis à jour");
+      setSuccess("Profil mis a jour");
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -96,7 +94,7 @@ export default function SettingsPage() {
       return;
     }
     if (newPassword.length < 6) {
-      setError("Le mot de passe doit contenir au moins 6 caractères");
+      setError("Le mot de passe doit contenir au moins 6 caracteres");
       return;
     }
 
@@ -109,7 +107,7 @@ export default function SettingsPage() {
           new_password: newPassword,
         }),
       });
-      setSuccess("Mot de passe modifié");
+      setSuccess("Mot de passe modifie");
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
@@ -126,20 +124,25 @@ export default function SettingsPage() {
       router.push("/auth/login");
       return;
     }
-    // Ouvre le flow OAuth (le backend redirige vers Google)
-    window.location.href = `http://127.0.0.1:8000/google/connect?token=${token}`;
+    const url = "http://127.0.0.1:8000/google/connect?token=" + encodeURIComponent(token);
+    window.location.href = url;
   };
 
   if (loading) {
     return <div className="text-gray-500">Loading...</div>;
   }
 
+  const totalPages = Math.max(1, Math.ceil(accounts.length / ACCOUNTS_PER_PAGE));
+  const pageStart = (page - 1) * ACCOUNTS_PER_PAGE;
+  const pageAccounts = accounts.slice(pageStart, pageStart + ACCOUNTS_PER_PAGE);
+  const displayName = user?.full_name || user?.email || "";
+
   return (
     <div className="space-y-6 max-w-3xl">
       <div>
         <h1 className="text-xl font-semibold text-gray-900">Settings</h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          Profil, sécurité et connexions Google
+          Profil, securite et connexions Google
         </p>
       </div>
 
@@ -152,7 +155,6 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* Profil */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <h2 className="font-medium text-gray-900 mb-4">Profil</h2>
         <form onSubmit={handleSaveProfile} className="space-y-4">
@@ -184,7 +186,6 @@ export default function SettingsPage() {
         </form>
       </div>
 
-      {/* Mot de passe */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <h2 className="font-medium text-gray-900 mb-4">Changer le mot de passe</h2>
         <form onSubmit={handleChangePassword} className="space-y-4">
@@ -236,9 +237,8 @@ export default function SettingsPage() {
         </form>
       </div>
 
-      {/* Comptes Google */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-1">
           <h2 className="font-medium text-gray-900">Comptes Google</h2>
           <button
             onClick={handleConnectGoogle}
@@ -247,30 +247,59 @@ export default function SettingsPage() {
             + Connecter Google
           </button>
         </div>
+        <p className="text-xs text-gray-400 mb-4">
+          Connecte sous : <span className="text-gray-600 font-medium">{displayName}</span>
+        </p>
 
         {accounts.length === 0 ? (
           <p className="text-sm text-gray-400">
-            Aucun compte Google connecté. Connectez-en un pour importer GSC / GA4.
+            Aucun compte Google connecte. Connectez-en un pour importer GSC / GA4.
           </p>
         ) : (
-          <div className="space-y-2">
-            {accounts.map((acc) => (
-              <div
-                key={acc.id}
-                className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0"
-              >
-                <div>
-                  <p className="text-sm font-medium text-gray-900">
-                    {acc.google_email || acc.id}
-                  </p>
-                  <p className="text-xs text-gray-400">Connecté</p>
+          <>
+            <div className="space-y-2">
+              {pageAccounts.map((acc) => (
+                <div
+                  key={acc.id}
+                  className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">
+                      {acc.google_email || displayName}
+                    </p>
+                    <p className="text-xs text-gray-400">Compte Google connecte</p>
+                  </div>
+                  <span className="text-xs text-green-700 bg-green-50 px-2 py-1 rounded-full">
+                    Actif
+                  </span>
                 </div>
-                <span className="text-xs text-green-700 bg-green-50 px-2 py-1 rounded-full">
-                  Actif
+              ))}
+            </div>
+
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-50">
+                <span className="text-xs text-gray-400">
+                  Page {page} sur {totalPages}
                 </span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                    className="text-xs px-3 py-1.5 border border-gray-300 rounded-md disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                  >
+                    Precedent
+                  </button>
+                  <button
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={page === totalPages}
+                    className="text-xs px-3 py-1.5 border border-gray-300 rounded-md disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                  >
+                    Suivant
+                  </button>
+                </div>
               </div>
-            ))}
-          </div>
+            )}
+          </>
         )}
       </div>
     </div>
