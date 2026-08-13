@@ -14,6 +14,8 @@ from app.models.google_account import GoogleAccount
 from app.models.gsc_metric import GscMetric
 from app.models.ga4_metric import Ga4Metric
 from app.services.google_service import GoogleService
+from fastapi.responses import Response
+from app.services.pdf_report import generate_pdf
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
@@ -284,3 +286,23 @@ async def get_site_report(
         "top_pages_ga4": top_pages_ga4,
         "daily_trend": daily_trend,
     }
+
+
+@router.get("/sites/{site_id}/report/pdf")
+async def get_site_report_pdf(
+    site_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    # Réutilise la logique déjà présente dans get_site_report
+    report_data = await get_site_report(site_id, current_user, db)
+
+    pdf_bytes = generate_pdf(report_data)
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="report-{report_data["site"]}.pdf"'
+        },
+    )
