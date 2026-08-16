@@ -33,6 +33,13 @@ CATEGORIE_LABELS = {"good": "Bon", "needs_improvement": "À améliorer", "poor":
 SEVERITY_LABELS = {"critical": "Critique", "important": "Important", "opportunity": "Opportunité"}
 STATUS_LABELS = {"open": "Ouvert", "done": "Résolu", "dismissed": "Ignoré"}
 
+SECTION_TITLES = {
+    "gsc": "Search Console",
+    "ga4": "Analytics",
+    "cwv": "Core Web Vitals",
+    "recommendations": "AI Insights",
+}
+
 
 def format_number(n: float) -> str:
     if n >= 1_000_000:
@@ -101,6 +108,7 @@ def _base_css() -> str:
         .footer {{ font-size: 7.5px; color: {COLOR_MUTED}; margin-top: 24px;
                    border-top: 1px solid {COLOR_BORDER}; padding-top: 8px; }}
         .badge {{ font-size: 8px; padding: 2px 8px; border-radius: 8px; font-weight: bold; }}
+        .section-divider {{ page-break-before: always; }}
     </style>"""
 
 
@@ -117,7 +125,6 @@ def _render_pdf(html: str) -> bytes:
 # ==================== GRAPHIQUES ====================
 
 def build_trend_chart(daily_trend: list[dict]) -> str:
-    """Graphique double axe clics/sessions (rapport combiné)."""
     if not daily_trend:
         return ""
     dates = [d["date"][5:] for d in daily_trend]
@@ -127,7 +134,6 @@ def build_trend_chart(daily_trend: list[dict]) -> str:
 
 
 def build_single_metric_chart(daily_trend: list[dict], value_key: str, label: str, color: str) -> str:
-    """Graphique simple à une seule métrique (rapports GSC/GA4 séparés)."""
     if not daily_trend:
         return ""
     dates = [d["date"][5:] for d in daily_trend]
@@ -200,7 +206,223 @@ def _chart_tag(chart_b64: str) -> str:
     return f"<p style='color:{COLOR_MUTED}; font-size:10px; padding:20px 0;'>Pas assez de données pour le graphique</p>"
 
 
-# ==================== RAPPORT COMBINÉ (existant, conservé) ====================
+# ==================== BODIES RÉUTILISABLES (une section = un morceau de HTML) ====================
+
+def build_gsc_body(report: dict, as_subsection: bool = False) -> str:
+    """report attendu au format du schéma GscReport (site, period, summary, top_keywords, top_pages, daily_trend)."""
+    chart_b64 = build_single_metric_chart(report["daily_trend"], "clicks", "Clics", COLOR_ACCENT)
+    s = report["summary"]
+    avg_position_display = f"{s['avg_position']:.2f}" if s['avg_position'] else "0"
+    avg_ctr_display = f"{(s['avg_ctr'] * 100):.2f}%" if s['avg_ctr'] else "0%"
+
+    def rows_pages(pages):
+        if not pages:
+            return _empty_row(3)
+        return "".join(f"""
+            <tr style="background-color:{'#ffffff' if i % 2 == 0 else '#f9fafb'};">
+                <td style="color:{COLOR_ACCENT};">{p['page_url'][:60]}</td>
+                <td style="text-align:right;">{format_number(p['clicks'])}</td>
+                <td style="text-align:right;">{format_number(p['impressions'])}</td>
+            </tr>""" for i, p in enumerate(pages))
+
+    def rows_keywords(keywords):
+        if not keywords:
+            return _empty_row(3)
+        html = ""
+        for i, kw in enumerate(keywords):
+            pos = f"{kw['position']:.2f}" if kw["position"] else "-"
+            html += f"""
+            <tr style="background-color:{'#ffffff' if i % 2 == 0 else '#f9fafb'};">
+                <td>{kw['keyword']}</td>
+                <td style="text-align:right;">{format_number(kw['clicks'])}</td>
+                <td style="text-align:right;">{pos}</td>
+            </tr>"""
+        return html
+
+    title_block = _section_title("Search Console") if as_subsection else ""
+
+    return f"""
+        {title_block}
+        {_section_title("Overview")}
+        <table style="width:100%; margin-top:14px;"><tr>
+            {_kpi_card("Clicks", format_number(s['total_clicks']))}
+            {_kpi_card("Impressions", format_number(s['total_impressions']))}
+            {_kpi_card("Avg CTR", avg_ctr_display)}
+            {_kpi_card("Avg Position", avg_position_display)}
+        </tr></table>
+
+        {_section_title("Clicks Trend")}
+        <div style="margin-top:10px;">{_chart_tag(chart_b64)}</div>
+
+        {_section_title("Top Pages")}
+        <table class="data-table">
+            <tr><th>Page</th><th style="text-align:right;">Clicks</th><th style="text-align:right;">Impressions</th></tr>
+            {rows_pages(report['top_pages'])}
+        </table>
+
+        {_section_title("Top Queries")}
+        <table class="data-table">
+            <tr><th>Query</th><th style="text-align:right;">Clicks</th><th style="text-align:right;">Avg Position</th></tr>
+            {rows_keywords(report['top_keywords'])}
+        </table>
+
+        <p class="footer">NexRank — Google Search Console Report. Period: {report['period']}.</p>
+    """
+
+
+def build_ga4_body(report: dict, as_subsection: bool = False) -> str:
+    """report attendu au format du schéma Ga4Report."""
+    chart_b64 = build_single_metric_chart(report["daily_trend"], "sessions", "Sessions", COLOR_GREEN)
+    s = report["summary"]
+
+    def rows_pages(pages):
+        if not pages:
+            return _empty_row(3)
+        return "".join(f"""
+            <tr style="background-color:{'#ffffff' if i % 2 == 0 else '#f9fafb'};">
+                <td style="color:{COLOR_ACCENT};">{p['page_url'][:60]}</td>
+                <td style="text-align:right;">{format_number(p['sessions'])}</td>
+                <td style="text-align:right;">{format_number(p['pageviews'])}</td>
+            </tr>""" for i, p in enumerate(pages))
+
+    title_block = _section_title("Analytics") if as_subsection else ""
+
+    return f"""
+        {title_block}
+        {_section_title("Overview")}
+        <table style="width:100%; margin-top:14px;"><tr>
+            {_kpi_card("Sessions", format_number(s['total_sessions']), COLOR_GREEN)}
+            {_kpi_card("Users", format_number(s['total_users']), COLOR_GREEN)}
+            {_kpi_card("Pageviews", format_number(s['total_pageviews']), COLOR_GREEN)}
+        </tr></table>
+
+        {_section_title("Sessions Trend")}
+        <div style="margin-top:10px;">{_chart_tag(chart_b64)}</div>
+
+        {_section_title("Top Pages")}
+        <table class="data-table">
+            <tr><th>Page</th><th style="text-align:right;">Sessions</th><th style="text-align:right;">Pageviews</th></tr>
+            {rows_pages(report['top_pages'])}
+        </table>
+
+        <p class="footer">NexRank — Google Analytics 4 Report. Period: {report['period']}.</p>
+    """
+
+
+def build_cwv_body(report: dict, as_subsection: bool = False) -> str:
+    """report attendu au format du schéma CoreWebVitalsReport."""
+    s = report["summary"]
+
+    def metric_cell(valeur, categorie):
+        if valeur is None:
+            return "<td style='text-align:right; color:#9ca3af;'>—</td>"
+        color, bg = CATEGORIE_COLORS.get(categorie, (COLOR_MUTED, "#f3f4f6"))
+        label = CATEGORIE_LABELS.get(categorie, categorie)
+        unite = "" if abs(valeur) < 5 else "ms"
+        display = f"{valeur:.2f}" if unite == "" else f"{round(valeur)}{unite}"
+        return f"""<td style="text-align:right;">
+            <span class="badge" style="background-color:{bg}; color:{color};">{display} · {label}</span>
+        </td>"""
+
+    def rows_pages(pages):
+        if not pages:
+            return _empty_row(5)
+        html = ""
+        for i, p in enumerate(pages):
+            bg = "#ffffff" if i % 2 == 0 else "#f9fafb"
+            html += f"""
+            <tr style="background-color:{bg};">
+                <td style="color:{COLOR_ACCENT};">{p['page_url'][:45]}</td>
+                {metric_cell(p['lcp'], p['lcp_categorie'])}
+                {metric_cell(p['inp'], p['inp_categorie'])}
+                {metric_cell(p['cls'], p['cls_categorie'])}
+                {metric_cell(p['fcp'], p['fcp_categorie'])}
+            </tr>"""
+        return html
+
+    title_block = _section_title("Core Web Vitals") if as_subsection else ""
+
+    return f"""
+        {title_block}
+        {_section_title("Overview")}
+        <table style="width:100%; margin-top:14px;"><tr>
+            {_kpi_card("Pages analysées", str(s['total_pages_analysees']))}
+            {_kpi_card("Bonnes", str(s['nb_pages_bonnes']), COLOR_GREEN)}
+            {_kpi_card("À améliorer", str(s['nb_pages_a_ameliorer']), COLOR_AMBER)}
+            {_kpi_card("Faibles", str(s['nb_pages_faibles']), COLOR_RED)}
+        </tr></table>
+
+        {_section_title("Détail par page")}
+        <table class="data-table">
+            <tr>
+                <th>Page</th>
+                <th style="text-align:right;">LCP</th>
+                <th style="text-align:right;">INP</th>
+                <th style="text-align:right;">CLS</th>
+                <th style="text-align:right;">FCP</th>
+            </tr>
+            {rows_pages(report['pages'])}
+        </table>
+
+        <p class="footer">NexRank — Core Web Vitals Report. Data from Chrome UX Report &amp; PageSpeed Insights.</p>
+    """
+
+
+def build_recommendations_body(report: dict, as_subsection: bool = False) -> str:
+    """report attendu au format du schéma RecommendationsReport."""
+    s = report["summary"]
+
+    def rows_recos(recos):
+        if not recos:
+            return _empty_row(1)
+        html = ""
+        for r in recos:
+            color, bg = SEVERITY_COLORS.get(r["severity"], (COLOR_MUTED, "#f3f4f6"))
+            sev_label = SEVERITY_LABELS.get(r["severity"], r["severity"])
+            status_label = STATUS_LABELS.get(r["status"], r["status"])
+            impact = f"<div style='font-size:8.5px; color:{COLOR_MUTED}; margin-top:4px;'>Impact estimé : {r['estimated_impact']}</div>" if r["estimated_impact"] else ""
+            html += f"""
+            <div style="border:1px solid {COLOR_BORDER}; border-left:3px solid {color};
+                        border-radius:2px; padding:10px 12px; margin-bottom:8px;">
+                <table style="width:100%;"><tr>
+                    <td style="font-weight:bold; font-size:10.5px;">{r['title']}</td>
+                    <td style="text-align:right; white-space:nowrap;">
+                        <span class="badge" style="background-color:{bg}; color:{color};">{sev_label}</span>
+                        <span class="badge" style="background-color:#f3f4f6; color:{COLOR_MUTED}; margin-left:4px;">{status_label}</span>
+                    </td>
+                </tr></table>
+                <div style="font-size:9px; color:{COLOR_TEXT}; margin-top:6px; line-height:1.5;">{r['reasoning']}</div>
+                {impact}
+            </div>"""
+        return html
+
+    title_block = _section_title("AI Recommendations") if as_subsection else ""
+
+    return f"""
+        {title_block}
+        {_section_title("Overview")}
+        <table style="width:100%; margin-top:14px;"><tr>
+            {_kpi_card("Total", str(s['total']))}
+            {_kpi_card("Critiques", str(s['nb_critical']), COLOR_RED)}
+            {_kpi_card("Importantes", str(s['nb_important']), COLOR_AMBER)}
+            {_kpi_card("Opportunités", str(s['nb_opportunity']), COLOR_ACCENT)}
+        </tr></table>
+
+        {_section_title("Statut")}
+        <table style="width:100%; margin-top:14px;"><tr>
+            {_kpi_card("Ouvertes", str(s['nb_open']), COLOR_AMBER, width="33%")}
+            {_kpi_card("Résolues", str(s['nb_done']), COLOR_GREEN, width="33%")}
+            {_kpi_card("Ignorées", str(s['nb_dismissed']), COLOR_MUTED, width="33%")}
+        </tr></table>
+
+        {_section_title("Détail des recommandations")}
+        <div style="margin-top:12px;">{rows_recos(report['recommendations'])}</div>
+
+        <p class="footer">NexRank — AI-Generated SEO Recommendations Report.</p>
+    """
+
+
+# ==================== RAPPORT COMBINÉ ORIGINAL (conservé, inchangé) ====================
 
 def build_report_html(report: dict) -> str:
     chart_b64 = build_trend_chart(report.get("daily_trend", []))
@@ -277,231 +499,77 @@ def generate_pdf(report: dict) -> bytes:
     return _render_pdf(build_report_html(report))
 
 
-# ==================== RAPPORT GSC SEUL ====================
+# ==================== RAPPORTS MONO-SECTION (utilisent les bodies ci-dessus) ====================
 
 def generate_gsc_pdf(report: dict) -> bytes:
-    chart_b64 = build_single_metric_chart(report["daily_trend"], "clicks", "Clics", COLOR_ACCENT)
-    s = report["summary"]
-    avg_position_display = f"{s['avg_position']:.2f}" if s['avg_position'] else "0"
-    avg_ctr_display = f"{(s['avg_ctr'] * 100):.2f}%" if s['avg_ctr'] else "0%"
-
-    def rows_pages(pages):
-        if not pages:
-            return _empty_row(3)
-        return "".join(f"""
-            <tr style="background-color:{'#ffffff' if i % 2 == 0 else '#f9fafb'};">
-                <td style="color:{COLOR_ACCENT};">{p['page_url'][:60]}</td>
-                <td style="text-align:right;">{format_number(p['clicks'])}</td>
-                <td style="text-align:right;">{format_number(p['impressions'])}</td>
-            </tr>""" for i, p in enumerate(pages))
-
-    def rows_keywords(keywords):
-        if not keywords:
-            return _empty_row(3)
-        html = ""
-        for i, kw in enumerate(keywords):
-            pos = f"{kw['position']:.2f}" if kw["position"] else "-"
-            html += f"""
-            <tr style="background-color:{'#ffffff' if i % 2 == 0 else '#f9fafb'};">
-                <td>{kw['keyword']}</td>
-                <td style="text-align:right;">{format_number(kw['clicks'])}</td>
-                <td style="text-align:right;">{pos}</td>
-            </tr>"""
-        return html
-
-    body = f"""
-        {_section_title("Overview")}
-        <table style="width:100%; margin-top:14px;"><tr>
-            {_kpi_card("Clicks", format_number(s['total_clicks']))}
-            {_kpi_card("Impressions", format_number(s['total_impressions']))}
-            {_kpi_card("Avg CTR", avg_ctr_display)}
-            {_kpi_card("Avg Position", avg_position_display)}
-        </tr></table>
-
-        {_section_title("Clicks Trend")}
-        <div style="margin-top:10px;">{_chart_tag(chart_b64)}</div>
-
-        {_section_title("Top Pages")}
-        <table class="data-table">
-            <tr><th>Page</th><th style="text-align:right;">Clicks</th><th style="text-align:right;">Impressions</th></tr>
-            {rows_pages(report['top_pages'])}
-        </table>
-
-        {_section_title("Top Queries")}
-        <table class="data-table">
-            <tr><th>Query</th><th style="text-align:right;">Clicks</th><th style="text-align:right;">Avg Position</th></tr>
-            {rows_keywords(report['top_keywords'])}
-        </table>
-
-        <p class="footer">NexRank — Google Search Console Report. Period: {report['period']}.</p>
-    """
-
     html = f"""<html><head>{_base_css()}</head><body>
         {_cover("Search Console", "GSC Performance Report", report['site'])}
-        {body}
+        {build_gsc_body(report)}
     </div></body></html>"""
     return _render_pdf(html)
 
-
-# ==================== RAPPORT GA4 SEUL ====================
 
 def generate_ga4_pdf(report: dict) -> bytes:
-    chart_b64 = build_single_metric_chart(report["daily_trend"], "sessions", "Sessions", COLOR_GREEN)
-    s = report["summary"]
-
-    def rows_pages(pages):
-        if not pages:
-            return _empty_row(3)
-        return "".join(f"""
-            <tr style="background-color:{'#ffffff' if i % 2 == 0 else '#f9fafb'};">
-                <td style="color:{COLOR_ACCENT};">{p['page_url'][:60]}</td>
-                <td style="text-align:right;">{format_number(p['sessions'])}</td>
-                <td style="text-align:right;">{format_number(p['pageviews'])}</td>
-            </tr>""" for i, p in enumerate(pages))
-
-    body = f"""
-        {_section_title("Overview")}
-        <table style="width:100%; margin-top:14px;"><tr>
-            {_kpi_card("Sessions", format_number(s['total_sessions']), COLOR_GREEN)}
-            {_kpi_card("Users", format_number(s['total_users']), COLOR_GREEN)}
-            {_kpi_card("Pageviews", format_number(s['total_pageviews']), COLOR_GREEN)}
-        </tr></table>
-
-        {_section_title("Sessions Trend")}
-        <div style="margin-top:10px;">{_chart_tag(chart_b64)}</div>
-
-        {_section_title("Top Pages")}
-        <table class="data-table">
-            <tr><th>Page</th><th style="text-align:right;">Sessions</th><th style="text-align:right;">Pageviews</th></tr>
-            {rows_pages(report['top_pages'])}
-        </table>
-
-        <p class="footer">NexRank — Google Analytics 4 Report. Period: {report['period']}.</p>
-    """
-
     html = f"""<html><head>{_base_css()}</head><body>
         {_cover("Analytics", "GA4 Traffic Report", report['site'])}
-        {body}
+        {build_ga4_body(report)}
     </div></body></html>"""
     return _render_pdf(html)
 
-
-# ==================== RAPPORT CORE WEB VITALS SEUL ====================
 
 def generate_cwv_pdf(report: dict) -> bytes:
-    s = report["summary"]
-
-    def metric_cell(valeur, categorie):
-        if valeur is None:
-            return "<td style='text-align:right; color:#9ca3af;'>—</td>"
-        color, bg = CATEGORIE_COLORS.get(categorie, (COLOR_MUTED, "#f3f4f6"))
-        label = CATEGORIE_LABELS.get(categorie, categorie)
-        unite = "" if abs(valeur) < 5 else "ms"  # heuristique simple: CLS est petit, le reste est en ms
-        display = f"{valeur:.2f}" if unite == "" else f"{round(valeur)}{unite}"
-        return f"""<td style="text-align:right;">
-            <span class="badge" style="background-color:{bg}; color:{color};">{display} · {label}</span>
-        </td>"""
-
-    def rows_pages(pages):
-        if not pages:
-            return _empty_row(5)
-        html = ""
-        for i, p in enumerate(pages):
-            bg = "#ffffff" if i % 2 == 0 else "#f9fafb"
-            html += f"""
-            <tr style="background-color:{bg};">
-                <td style="color:{COLOR_ACCENT};">{p['page_url'][:45]}</td>
-                {metric_cell(p['lcp'], p['lcp_categorie'])}
-                {metric_cell(p['inp'], p['inp_categorie'])}
-                {metric_cell(p['cls'], p['cls_categorie'])}
-                {metric_cell(p['fcp'], p['fcp_categorie'])}
-            </tr>"""
-        return html
-
-    body = f"""
-        {_section_title("Overview")}
-        <table style="width:100%; margin-top:14px;"><tr>
-            {_kpi_card("Pages analysées", str(s['total_pages_analysees']))}
-            {_kpi_card("Bonnes", str(s['nb_pages_bonnes']), COLOR_GREEN)}
-            {_kpi_card("À améliorer", str(s['nb_pages_a_ameliorer']), COLOR_AMBER)}
-            {_kpi_card("Faibles", str(s['nb_pages_faibles']), COLOR_RED)}
-        </tr></table>
-
-        {_section_title("Détail par page")}
-        <table class="data-table">
-            <tr>
-                <th>Page</th>
-                <th style="text-align:right;">LCP</th>
-                <th style="text-align:right;">INP</th>
-                <th style="text-align:right;">CLS</th>
-                <th style="text-align:right;">FCP</th>
-            </tr>
-            {rows_pages(report['pages'])}
-        </table>
-
-        <p class="footer">NexRank — Core Web Vitals Report. Data from Chrome UX Report &amp; PageSpeed Insights.</p>
-    """
-
     html = f"""<html><head>{_base_css()}</head><body>
         {_cover("Core Web Vitals", "Site Speed &amp; Experience Report", report['site'])}
-        {body}
+        {build_cwv_body(report)}
     </div></body></html>"""
     return _render_pdf(html)
 
 
-# ==================== RAPPORT RECOMMANDATIONS SEUL ====================
-
 def generate_recommendations_pdf(report: dict) -> bytes:
-    s = report["summary"]
-
-    def rows_recos(recos):
-        if not recos:
-            return _empty_row(1)
-        html = ""
-        for r in recos:
-            color, bg = SEVERITY_COLORS.get(r["severity"], (COLOR_MUTED, "#f3f4f6"))
-            sev_label = SEVERITY_LABELS.get(r["severity"], r["severity"])
-            status_label = STATUS_LABELS.get(r["status"], r["status"])
-            impact = f"<div style='font-size:8.5px; color:{COLOR_MUTED}; margin-top:4px;'>Impact estimé : {r['estimated_impact']}</div>" if r["estimated_impact"] else ""
-            html += f"""
-            <div style="border:1px solid {COLOR_BORDER}; border-left:3px solid {color};
-                        border-radius:2px; padding:10px 12px; margin-bottom:8px;">
-                <table style="width:100%;"><tr>
-                    <td style="font-weight:bold; font-size:10.5px;">{r['title']}</td>
-                    <td style="text-align:right; white-space:nowrap;">
-                        <span class="badge" style="background-color:{bg}; color:{color};">{sev_label}</span>
-                        <span class="badge" style="background-color:#f3f4f6; color:{COLOR_MUTED}; margin-left:4px;">{status_label}</span>
-                    </td>
-                </tr></table>
-                <div style="font-size:9px; color:{COLOR_TEXT}; margin-top:6px; line-height:1.5;">{r['reasoning']}</div>
-                {impact}
-            </div>"""
-        return html
-
-    body = f"""
-        {_section_title("Overview")}
-        <table style="width:100%; margin-top:14px;"><tr>
-            {_kpi_card("Total", str(s['total']))}
-            {_kpi_card("Critiques", str(s['nb_critical']), COLOR_RED)}
-            {_kpi_card("Importantes", str(s['nb_important']), COLOR_AMBER)}
-            {_kpi_card("Opportunités", str(s['nb_opportunity']), COLOR_ACCENT)}
-        </tr></table>
-
-        {_section_title("Statut")}
-        <table style="width:100%; margin-top:14px;"><tr>
-            {_kpi_card("Ouvertes", str(s['nb_open']), COLOR_AMBER, width="33%")}
-            {_kpi_card("Résolues", str(s['nb_done']), COLOR_GREEN, width="33%")}
-            {_kpi_card("Ignorées", str(s['nb_dismissed']), COLOR_MUTED, width="33%")}
-        </tr></table>
-
-        {_section_title("Détail des recommandations")}
-        <div style="margin-top:12px;">{rows_recos(report['recommendations'])}</div>
-
-        <p class="footer">NexRank — AI-Generated SEO Recommendations Report.</p>
-    """
-
     html = f"""<html><head>{_base_css()}</head><body>
         {_cover("AI Insights", "SEO Recommendations Report", report['site'])}
-        {body}
+        {build_recommendations_body(report)}
+    </div></body></html>"""
+    return _render_pdf(html)
+
+
+# ==================== RAPPORT PERSONNALISÉ (BUILDER) ====================
+
+def generate_custom_pdf(site: str, period: str, sections_data: dict) -> bytes:
+    """
+    Génère un PDF combiné à partir des sections demandées.
+
+    sections_data: dict dont les clés possibles sont "gsc", "ga4", "cwv",
+    "recommendations", et les valeurs sont les dicts de rapport correspondants
+    (déjà au format attendu par build_xxx_body). Seules les clés présentes
+    sont incluses dans le PDF final, dans l'ordre gsc -> ga4 -> cwv -> recommendations.
+    """
+    builders = {
+        "gsc": build_gsc_body,
+        "ga4": build_ga4_body,
+        "cwv": build_cwv_body,
+        "recommendations": build_recommendations_body,
+    }
+
+    ordre = ["gsc", "ga4", "cwv", "recommendations"]
+    sections_incluses = [cle for cle in ordre if cle in sections_data]
+
+    if not sections_incluses:
+        raise ValueError("Aucune section valide fournie pour le rapport personnalisé")
+
+    noms_sections = " + ".join(SECTION_TITLES[cle] for cle in sections_incluses)
+    meta_extra = f" &nbsp;•&nbsp; Sections: {noms_sections}"
+
+    bodies = []
+    for i, cle in enumerate(sections_incluses):
+        body = builders[cle](sections_data[cle], as_subsection=True)
+        # Saut de page avant chaque section sauf la première (déjà après la couverture)
+        if i > 0:
+            bodies.append('<div class="section-divider"></div>')
+        bodies.append(body)
+
+    html = f"""<html><head>{_base_css()}</head><body>
+        {_cover("Custom Report", "Custom SEO Report", site, meta_extra)}
+        {''.join(bodies)}
     </div></body></html>"""
     return _render_pdf(html)

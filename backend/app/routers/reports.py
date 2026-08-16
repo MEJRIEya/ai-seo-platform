@@ -2,7 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from uuid import UUID
-from fastapi.responses import Response
+from fastapi import APIRouter, Depends, HTTPException, Query
+from typing import Literal
+from app.routers.analytics import get_gsc_report, get_ga4_report
+from app.services.pdf_report import generate_cwv_pdf, generate_recommendations_pdf, generate_custom_pdf
 
 from app.core.database import get_db
 from app.utils.auth import get_current_user
@@ -176,4 +179,46 @@ async def get_recommendations_report_pdf(
         content=pdf_bytes,
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="rapport-recommandations-{report_data["site"]}.pdf"'},
+    )
+
+# ==================== RAPPORT PERSONNALISÉ (BUILDER) ====================
+
+SectionKey = Literal["gsc", "ga4", "cwv", "recommendations"]
+
+
+@router.get("/sites/{site_id}/report/custom/pdf")
+async def get_custom_report_pdf(
+    site_id: UUID,
+    sections: list[SectionKey] = Query(..., description="Sections à inclure, ex: ?sections=gsc&sections=ga4"),
+    days: int = 30,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Génère un PDF combiné à partir des sections demandées.
+    Exemple d'appel : /analytics/sites/{id}/report/custom/pdf?sections=gsc&sections=cwv&days=30
+    """
+    site = await _get_owned_site(site_id, current_user, db)
+
+    sections_data = {}
+
+    if "gsc" in sections:
+        sections_data["gsc"] = await get_gsc_report(site_id, days, current_user, db)
+    if "ga4" in sections:
+        sections_data["ga4"] = await get_ga4_report(site_id, days, current_user, db)
+    if "cwv" in sections:
+        sections_data["cwv"] = await get_cwv_report(site_id, current_user, db)
+    if "recommendations" in sections:
+        sections_data["recommendations"] = await get_recommendations_report(site_id, current_user, db)
+
+    if not sections_data:
+        raise HTTPException(status_code=400, detail="Aucune section valide sélectionnée")
+
+    period = f"Last {days} days" if any(k in sections for k in ["gsc", "ga4"]) else "All time"
+    pdf_bytes = generate_custom_pdf(site.domain, period, sections_data)
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="rapport-personnalise-{site.domain}.pdf"'},
     )
