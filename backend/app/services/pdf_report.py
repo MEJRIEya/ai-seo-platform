@@ -7,13 +7,31 @@ from xhtml2pdf import pisa
 from datetime import datetime
 
 # ---- Palette (cohérente avec le frontend : accent bleu #2563eb) ----
-COLOR_PRIMARY = "#1e3a8a"      # bleu marine foncé (couverture, entêtes de tableau)
-COLOR_ACCENT = "#2563eb"       # bleu principal (chiffres clés, liens)
-COLOR_ACCENT_LIGHT = "#eff6ff" # fond très clair pour les cartes KPI
-COLOR_GREEN = "#16a34a"        # sessions / GA4
+COLOR_PRIMARY = "#1e3a8a"
+COLOR_ACCENT = "#2563eb"
+COLOR_ACCENT_LIGHT = "#eff6ff"
+COLOR_GREEN = "#16a34a"
+COLOR_GREEN_LIGHT = "#f0fdf4"
+COLOR_RED = "#dc2626"
+COLOR_RED_LIGHT = "#fef2f2"
+COLOR_AMBER = "#d97706"
 COLOR_TEXT = "#111827"
 COLOR_MUTED = "#6b7280"
 COLOR_BORDER = "#e5e7eb"
+
+SEVERITY_COLORS = {
+    "critical": (COLOR_RED, COLOR_RED_LIGHT),
+    "important": (COLOR_AMBER, "#fffbeb"),
+    "opportunity": (COLOR_ACCENT, COLOR_ACCENT_LIGHT),
+}
+CATEGORIE_COLORS = {
+    "good": (COLOR_GREEN, COLOR_GREEN_LIGHT),
+    "needs_improvement": (COLOR_AMBER, "#fffbeb"),
+    "poor": (COLOR_RED, COLOR_RED_LIGHT),
+}
+CATEGORIE_LABELS = {"good": "Bon", "needs_improvement": "À améliorer", "poor": "Faible", None: "—"}
+SEVERITY_LABELS = {"critical": "Critique", "important": "Important", "opportunity": "Opportunité"}
+STATUS_LABELS = {"open": "Ouvert", "done": "Résolu", "dismissed": "Ignoré"}
 
 
 def format_number(n: float) -> str:
@@ -24,55 +42,9 @@ def format_number(n: float) -> str:
     return str(int(n))
 
 
-def build_trend_chart(daily_trend: list[dict]) -> str:
-    """Génère un graphique clics/sessions en image, retourne en base64 pour l'embed HTML."""
-    if not daily_trend:
-        return ""
-
-    dates = [d["date"][5:] for d in daily_trend]  # MM-DD
-    clicks = [d["clicks"] for d in daily_trend]
-    sessions = [d["sessions"] for d in daily_trend]
-
-    plt.rcParams["font.family"] = "sans-serif"
-    fig, ax1 = plt.subplots(figsize=(7.2, 2.6))
-    fig.patch.set_alpha(0)
-    ax1.set_facecolor("none")
-
-    ax1.plot(dates, clicks, color=COLOR_ACCENT, linewidth=2, label="Clics (GSC)")
-    ax1.fill_between(range(len(dates)), clicks, color=COLOR_ACCENT, alpha=0.06)
-    ax1.set_ylabel("Clics", fontsize=8, color=COLOR_ACCENT)
-    ax1.tick_params(axis="x", labelsize=6, rotation=45, colors=COLOR_MUTED)
-    ax1.tick_params(axis="y", labelsize=7, colors=COLOR_ACCENT)
-    for spine in ["top", "right"]:
-        ax1.spines[spine].set_visible(False)
-    ax1.spines["left"].set_color(COLOR_BORDER)
-    ax1.spines["bottom"].set_color(COLOR_BORDER)
-    ax1.grid(axis="y", color=COLOR_BORDER, linewidth=0.6, alpha=0.6)
-    ax1.set_axisbelow(True)
-
-    ax2 = ax1.twinx()
-    ax2.plot(dates, sessions, color=COLOR_GREEN, linewidth=2, label="Sessions (GA4)")
-    ax2.set_ylabel("Sessions", fontsize=8, color=COLOR_GREEN)
-    ax2.tick_params(axis="y", labelsize=7, colors=COLOR_GREEN)
-    for spine in ["top", "right", "left"]:
-        ax2.spines[spine].set_visible(False)
-
-    if len(dates) > 10:
-        step = len(dates) // 10
-        ax1.set_xticks(range(0, len(dates), step))
-
-    fig.tight_layout()
-
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=150, transparent=True)
-    plt.close(fig)
-    buf.seek(0)
-    return base64.b64encode(buf.read()).decode("utf-8")
-
-
-def _kpi_card(label: str, value: str, color: str = COLOR_ACCENT) -> str:
+def _kpi_card(label: str, value: str, color: str = COLOR_ACCENT, width: str = "25%") -> str:
     return f"""
-    <td style="width:25%; padding:4px;">
+    <td style="width:{width}; padding:4px;">
         <div style="background-color:{COLOR_ACCENT_LIGHT}; border-left:3px solid {color};
                     padding:12px 14px; border-radius:2px;">
             <div style="font-size:8.5px; color:{COLOR_MUTED}; text-transform:uppercase;
@@ -93,115 +65,185 @@ def _section_title(text: str) -> str:
     </table>"""
 
 
+def _cover(brand_subtitle: str, title: str, site: str, meta_extra: str = "") -> str:
+    today = datetime.now().strftime("%d %B %Y")
+    return f"""
+    <div class="cover-band"></div>
+    <div class="cover">
+        <div class="brand">NexRank &nbsp;•&nbsp; {brand_subtitle}</div>
+        <h1>{title}</h1>
+        <div class="subtitle">{site}</div>
+        <div class="meta">
+            <div class="meta-line">Generated on {today}{meta_extra}</div>
+        </div>
+    </div>
+    <div style="page-break-before: always;">"""
+
+
+def _base_css() -> str:
+    return f"""
+    <style>
+        @page {{ size: A4; margin: 2.2cm 2cm 2cm 2cm; }}
+        body {{ font-family: Helvetica, Arial, sans-serif; color: {COLOR_TEXT}; font-size: 10.5px; }}
+        .cover-band {{ background-color: {COLOR_PRIMARY}; height: 10px; width: 100%; }}
+        .cover {{ text-align: left; padding-top: 140px; padding-left: 10px; }}
+        .cover .brand {{ font-size: 12px; font-weight: bold; color: {COLOR_ACCENT};
+            letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 40px; }}
+        .cover h1 {{ font-size: 30px; font-weight: bold; margin: 0 0 8px 0; color: {COLOR_TEXT}; }}
+        .cover .subtitle {{ font-size: 15px; color: {COLOR_MUTED}; margin-bottom: 4px; }}
+        .cover .meta {{ font-size: 10px; color: {COLOR_MUTED}; margin-top: 220px; }}
+        .cover .meta-line {{ border-top: 1px solid {COLOR_BORDER}; padding-top: 10px; margin-top: 10px; }}
+        table {{ border-collapse: collapse; }}
+        table.data-table {{ width: 100%; font-size: 9.5px; margin-top: 4px; }}
+        table.data-table th {{ text-align: left; font-size: 8.5px; color: #ffffff; text-transform: uppercase;
+            letter-spacing: 0.4px; background-color: {COLOR_PRIMARY}; padding: 7px 6px; }}
+        table.data-table td {{ padding: 6px 6px; border-bottom: 1px solid {COLOR_BORDER}; }}
+        .footer {{ font-size: 7.5px; color: {COLOR_MUTED}; margin-top: 24px;
+                   border-top: 1px solid {COLOR_BORDER}; padding-top: 8px; }}
+        .badge {{ font-size: 8px; padding: 2px 8px; border-radius: 8px; font-weight: bold; }}
+    </style>"""
+
+
+def _empty_row(colspan: int) -> str:
+    return f"<tr><td colspan='{colspan}' style='text-align:center;color:{COLOR_MUTED};padding:16px;'>Aucune donnée</td></tr>"
+
+
+def _render_pdf(html: str) -> bytes:
+    buf = io.BytesIO()
+    pisa.CreatePDF(html, dest=buf)
+    return buf.getvalue()
+
+
+# ==================== GRAPHIQUES ====================
+
+def build_trend_chart(daily_trend: list[dict]) -> str:
+    """Graphique double axe clics/sessions (rapport combiné)."""
+    if not daily_trend:
+        return ""
+    dates = [d["date"][5:] for d in daily_trend]
+    clicks = [d["clicks"] for d in daily_trend]
+    sessions = [d["sessions"] for d in daily_trend]
+    return _render_dual_chart(dates, clicks, "Clics (GSC)", COLOR_ACCENT, sessions, "Sessions (GA4)", COLOR_GREEN)
+
+
+def build_single_metric_chart(daily_trend: list[dict], value_key: str, label: str, color: str) -> str:
+    """Graphique simple à une seule métrique (rapports GSC/GA4 séparés)."""
+    if not daily_trend:
+        return ""
+    dates = [d["date"][5:] for d in daily_trend]
+    values = [d[value_key] for d in daily_trend]
+
+    fig, ax = plt.subplots(figsize=(7.2, 2.4))
+    fig.patch.set_alpha(0)
+    ax.set_facecolor("none")
+    ax.plot(dates, values, color=color, linewidth=2, label=label)
+    ax.fill_between(range(len(dates)), values, color=color, alpha=0.08)
+    ax.set_ylabel(label, fontsize=8, color=color)
+    ax.tick_params(axis="x", labelsize=6, rotation=45, colors=COLOR_MUTED)
+    ax.tick_params(axis="y", labelsize=7, colors=color)
+    for spine in ["top", "right"]:
+        ax.spines[spine].set_visible(False)
+    ax.spines["left"].set_color(COLOR_BORDER)
+    ax.spines["bottom"].set_color(COLOR_BORDER)
+    ax.grid(axis="y", color=COLOR_BORDER, linewidth=0.6, alpha=0.6)
+    ax.set_axisbelow(True)
+    if len(dates) > 10:
+        step = len(dates) // 10
+        ax.set_xticks(range(0, len(dates), step))
+    fig.tight_layout()
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=150, transparent=True)
+    plt.close(fig)
+    buf.seek(0)
+    return base64.b64encode(buf.read()).decode("utf-8")
+
+
+def _render_dual_chart(dates, series1, label1, color1, series2, label2, color2) -> str:
+    fig, ax1 = plt.subplots(figsize=(7.2, 2.6))
+    fig.patch.set_alpha(0)
+    ax1.set_facecolor("none")
+    ax1.plot(dates, series1, color=color1, linewidth=2, label=label1)
+    ax1.fill_between(range(len(dates)), series1, color=color1, alpha=0.06)
+    ax1.set_ylabel(label1, fontsize=8, color=color1)
+    ax1.tick_params(axis="x", labelsize=6, rotation=45, colors=COLOR_MUTED)
+    ax1.tick_params(axis="y", labelsize=7, colors=color1)
+    for spine in ["top", "right"]:
+        ax1.spines[spine].set_visible(False)
+    ax1.spines["left"].set_color(COLOR_BORDER)
+    ax1.spines["bottom"].set_color(COLOR_BORDER)
+    ax1.grid(axis="y", color=COLOR_BORDER, linewidth=0.6, alpha=0.6)
+    ax1.set_axisbelow(True)
+
+    ax2 = ax1.twinx()
+    ax2.plot(dates, series2, color=color2, linewidth=2, label=label2)
+    ax2.set_ylabel(label2, fontsize=8, color=color2)
+    ax2.tick_params(axis="y", labelsize=7, colors=color2)
+    for spine in ["top", "right", "left"]:
+        ax2.spines[spine].set_visible(False)
+
+    if len(dates) > 10:
+        step = len(dates) // 10
+        ax1.set_xticks(range(0, len(dates), step))
+    fig.tight_layout()
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=150, transparent=True)
+    plt.close(fig)
+    buf.seek(0)
+    return base64.b64encode(buf.read()).decode("utf-8")
+
+
+def _chart_tag(chart_b64: str) -> str:
+    if chart_b64:
+        return f'<img src="data:image/png;base64,{chart_b64}" style="width:100%;" />'
+    return f"<p style='color:{COLOR_MUTED}; font-size:10px; padding:20px 0;'>Pas assez de données pour le graphique</p>"
+
+
+# ==================== RAPPORT COMBINÉ (existant, conservé) ====================
+
 def build_report_html(report: dict) -> str:
     chart_b64 = build_trend_chart(report.get("daily_trend", []))
-    chart_img_tag = (
-        f'<img src="data:image/png;base64,{chart_b64}" style="width:100%;" />'
-        if chart_b64 else
-        f"<p style='color:{COLOR_MUTED}; font-size:10px; padding:20px 0;'>Pas assez de données pour le graphique</p>"
-    )
-
     gsc = report["gsc_summary"]
     ga4 = report["ga4_summary"]
-    today = datetime.now().strftime("%d %B %Y")
-
     avg_position_display = f"{gsc['avg_position']:.2f}" if gsc['avg_position'] else "0"
     avg_ctr_display = f"{(gsc['avg_ctr'] * 100):.2f}%" if gsc['avg_ctr'] else "0%"
 
     def rows_pages(pages):
         if not pages:
-            return f"<tr><td colspan='3' style='text-align:center;color:{COLOR_MUTED};padding:16px;'>Aucune donnée</td></tr>"
-        html = ""
-        for i, p in enumerate(pages):
-            bg = "#ffffff" if i % 2 == 0 else "#f9fafb"
-            html += f"""
-            <tr style="background-color:{bg};">
+            return _empty_row(3)
+        return "".join(f"""
+            <tr style="background-color:{'#ffffff' if i % 2 == 0 else '#f9fafb'};">
                 <td style="color:{COLOR_ACCENT};">{p['page_url'][:60]}</td>
                 <td style="text-align:right;">{format_number(p['clicks'])}</td>
                 <td style="text-align:right;">{format_number(p['impressions'])}</td>
-            </tr>"""
-        return html
+            </tr>""" for i, p in enumerate(pages))
 
     def rows_keywords(keywords):
         if not keywords:
-            return f"<tr><td colspan='3' style='text-align:center;color:{COLOR_MUTED};padding:16px;'>Aucune donnée</td></tr>"
+            return _empty_row(3)
         html = ""
         for i, kw in enumerate(keywords):
             pos = f"{kw['position']:.2f}" if kw["position"] else "-"
-            bg = "#ffffff" if i % 2 == 0 else "#f9fafb"
             html += f"""
-            <tr style="background-color:{bg};">
+            <tr style="background-color:{'#ffffff' if i % 2 == 0 else '#f9fafb'};">
                 <td>{kw['keyword']}</td>
                 <td style="text-align:right;">{format_number(kw['clicks'])}</td>
                 <td style="text-align:right;">{pos}</td>
             </tr>"""
         return html
 
-    return f"""
-    <html>
-    <head>
-    <style>
-        @page {{
-            size: A4;
-            margin: 2.2cm 2cm 2cm 2cm;
-        }}
-        body {{ font-family: Helvetica, Arial, sans-serif; color: {COLOR_TEXT}; font-size: 10.5px; }}
-
-        /* ---------- Couverture ---------- */
-        .cover-band {{
-            background-color: {COLOR_PRIMARY};
-            height: 10px;
-            width: 100%;
-        }}
-        .cover {{ text-align: left; padding-top: 140px; padding-left: 10px; }}
-        .cover .brand {{
-            font-size: 13px; font-weight: bold; color: {COLOR_ACCENT};
-            letter-spacing: 2px; text-transform: uppercase; margin-bottom: 40px;
-        }}
-        .cover h1 {{ font-size: 32px; font-weight: bold; margin: 0 0 8px 0; color: {COLOR_TEXT}; }}
-        .cover .subtitle {{ font-size: 15px; color: {COLOR_MUTED}; margin-bottom: 4px; }}
-        .cover .meta {{ font-size: 10px; color: {COLOR_MUTED}; margin-top: 220px; }}
-        .cover .meta-line {{ border-top: 1px solid {COLOR_BORDER}; padding-top: 10px; margin-top: 10px; }}
-
-        /* ---------- Contenu ---------- */
-        table {{ border-collapse: collapse; }}
-        table.data-table {{ width: 100%; font-size: 9.5px; margin-top: 4px; }}
-        table.data-table th {{
-            text-align: left; font-size: 8.5px; color: #ffffff; text-transform: uppercase;
-            letter-spacing: 0.4px; background-color: {COLOR_PRIMARY}; padding: 7px 6px;
-        }}
-        table.data-table td {{ padding: 6px 6px; border-bottom: 1px solid {COLOR_BORDER}; }}
-
-        .footer {{ font-size: 7.5px; color: {COLOR_MUTED}; margin-top: 24px;
-                   border-top: 1px solid {COLOR_BORDER}; padding-top: 8px; }}
-    </style>
-    </head>
-    <body>
-
-    <div class="cover-band"></div>
-    <div class="cover">
-        <div class="brand">NexRank</div>
-        <h1>Google Search Console Report</h1>
-        <div class="subtitle">{report['site']}</div>
-        <div class="meta">
-            <div class="meta-line">Generated on {today} &nbsp;•&nbsp; Data from Google Search Console &amp; Google Analytics 4</div>
-        </div>
-    </div>
-
-    <div style="page-break-before: always;">
-
+    body = f"""
         {_section_title("Search Performance Overview")}
-        <table style="width:100%; margin-top:14px;">
-            <tr>
-                {_kpi_card("Clicks", format_number(gsc['total_clicks']))}
-                {_kpi_card("Impressions", format_number(gsc['total_impressions']))}
-                {_kpi_card("Avg CTR", avg_ctr_display)}
-                {_kpi_card("Avg Position", avg_position_display)}
-            </tr>
-        </table>
+        <table style="width:100%; margin-top:14px;"><tr>
+            {_kpi_card("Clicks", format_number(gsc['total_clicks']))}
+            {_kpi_card("Impressions", format_number(gsc['total_impressions']))}
+            {_kpi_card("Avg CTR", avg_ctr_display)}
+            {_kpi_card("Avg Position", avg_position_display)}
+        </tr></table>
 
         {_section_title("Clicks &amp; Sessions Trend")}
-        <div style="margin-top:10px;">{chart_img_tag}</div>
+        <div style="margin-top:10px;">{_chart_tag(chart_b64)}</div>
 
         {_section_title("Top 10 Pages")}
         <table class="data-table">
@@ -216,24 +258,250 @@ def build_report_html(report: dict) -> str:
         </table>
 
         {_section_title("Traffic Overview (GA4)")}
-        <table style="width:100%; margin-top:14px;">
-            <tr>
-                {_kpi_card("Sessions", format_number(ga4['total_sessions']), COLOR_GREEN)}
-                {_kpi_card("Users", format_number(ga4['total_users']), COLOR_GREEN)}
-                {_kpi_card("Pageviews", format_number(ga4['total_pageviews']), COLOR_GREEN)}
-            </tr>
-        </table>
+        <table style="width:100%; margin-top:14px;"><tr>
+            {_kpi_card("Sessions", format_number(ga4['total_sessions']), COLOR_GREEN)}
+            {_kpi_card("Users", format_number(ga4['total_users']), COLOR_GREEN)}
+            {_kpi_card("Pageviews", format_number(ga4['total_pageviews']), COLOR_GREEN)}
+        </tr></table>
 
         <p class="footer">NexRank — Automated SEO Intelligence Report. Data sourced from Google Search Console &amp; Google Analytics 4.</p>
-    </div>
-
-    </body>
-    </html>
     """
+
+    return f"""<html><head>{_base_css()}</head><body>
+        {_cover("Full Report", "Google Search Console Report", report['site'])}
+        {body}
+    </div></body></html>"""
 
 
 def generate_pdf(report: dict) -> bytes:
-    html = build_report_html(report)
-    buf = io.BytesIO()
-    pisa.CreatePDF(html, dest=buf)
-    return buf.getvalue()
+    return _render_pdf(build_report_html(report))
+
+
+# ==================== RAPPORT GSC SEUL ====================
+
+def generate_gsc_pdf(report: dict) -> bytes:
+    chart_b64 = build_single_metric_chart(report["daily_trend"], "clicks", "Clics", COLOR_ACCENT)
+    s = report["summary"]
+    avg_position_display = f"{s['avg_position']:.2f}" if s['avg_position'] else "0"
+    avg_ctr_display = f"{(s['avg_ctr'] * 100):.2f}%" if s['avg_ctr'] else "0%"
+
+    def rows_pages(pages):
+        if not pages:
+            return _empty_row(3)
+        return "".join(f"""
+            <tr style="background-color:{'#ffffff' if i % 2 == 0 else '#f9fafb'};">
+                <td style="color:{COLOR_ACCENT};">{p['page_url'][:60]}</td>
+                <td style="text-align:right;">{format_number(p['clicks'])}</td>
+                <td style="text-align:right;">{format_number(p['impressions'])}</td>
+            </tr>""" for i, p in enumerate(pages))
+
+    def rows_keywords(keywords):
+        if not keywords:
+            return _empty_row(3)
+        html = ""
+        for i, kw in enumerate(keywords):
+            pos = f"{kw['position']:.2f}" if kw["position"] else "-"
+            html += f"""
+            <tr style="background-color:{'#ffffff' if i % 2 == 0 else '#f9fafb'};">
+                <td>{kw['keyword']}</td>
+                <td style="text-align:right;">{format_number(kw['clicks'])}</td>
+                <td style="text-align:right;">{pos}</td>
+            </tr>"""
+        return html
+
+    body = f"""
+        {_section_title("Overview")}
+        <table style="width:100%; margin-top:14px;"><tr>
+            {_kpi_card("Clicks", format_number(s['total_clicks']))}
+            {_kpi_card("Impressions", format_number(s['total_impressions']))}
+            {_kpi_card("Avg CTR", avg_ctr_display)}
+            {_kpi_card("Avg Position", avg_position_display)}
+        </tr></table>
+
+        {_section_title("Clicks Trend")}
+        <div style="margin-top:10px;">{_chart_tag(chart_b64)}</div>
+
+        {_section_title("Top Pages")}
+        <table class="data-table">
+            <tr><th>Page</th><th style="text-align:right;">Clicks</th><th style="text-align:right;">Impressions</th></tr>
+            {rows_pages(report['top_pages'])}
+        </table>
+
+        {_section_title("Top Queries")}
+        <table class="data-table">
+            <tr><th>Query</th><th style="text-align:right;">Clicks</th><th style="text-align:right;">Avg Position</th></tr>
+            {rows_keywords(report['top_keywords'])}
+        </table>
+
+        <p class="footer">NexRank — Google Search Console Report. Period: {report['period']}.</p>
+    """
+
+    html = f"""<html><head>{_base_css()}</head><body>
+        {_cover("Search Console", "GSC Performance Report", report['site'])}
+        {body}
+    </div></body></html>"""
+    return _render_pdf(html)
+
+
+# ==================== RAPPORT GA4 SEUL ====================
+
+def generate_ga4_pdf(report: dict) -> bytes:
+    chart_b64 = build_single_metric_chart(report["daily_trend"], "sessions", "Sessions", COLOR_GREEN)
+    s = report["summary"]
+
+    def rows_pages(pages):
+        if not pages:
+            return _empty_row(3)
+        return "".join(f"""
+            <tr style="background-color:{'#ffffff' if i % 2 == 0 else '#f9fafb'};">
+                <td style="color:{COLOR_ACCENT};">{p['page_url'][:60]}</td>
+                <td style="text-align:right;">{format_number(p['sessions'])}</td>
+                <td style="text-align:right;">{format_number(p['pageviews'])}</td>
+            </tr>""" for i, p in enumerate(pages))
+
+    body = f"""
+        {_section_title("Overview")}
+        <table style="width:100%; margin-top:14px;"><tr>
+            {_kpi_card("Sessions", format_number(s['total_sessions']), COLOR_GREEN)}
+            {_kpi_card("Users", format_number(s['total_users']), COLOR_GREEN)}
+            {_kpi_card("Pageviews", format_number(s['total_pageviews']), COLOR_GREEN)}
+        </tr></table>
+
+        {_section_title("Sessions Trend")}
+        <div style="margin-top:10px;">{_chart_tag(chart_b64)}</div>
+
+        {_section_title("Top Pages")}
+        <table class="data-table">
+            <tr><th>Page</th><th style="text-align:right;">Sessions</th><th style="text-align:right;">Pageviews</th></tr>
+            {rows_pages(report['top_pages'])}
+        </table>
+
+        <p class="footer">NexRank — Google Analytics 4 Report. Period: {report['period']}.</p>
+    """
+
+    html = f"""<html><head>{_base_css()}</head><body>
+        {_cover("Analytics", "GA4 Traffic Report", report['site'])}
+        {body}
+    </div></body></html>"""
+    return _render_pdf(html)
+
+
+# ==================== RAPPORT CORE WEB VITALS SEUL ====================
+
+def generate_cwv_pdf(report: dict) -> bytes:
+    s = report["summary"]
+
+    def metric_cell(valeur, categorie):
+        if valeur is None:
+            return "<td style='text-align:right; color:#9ca3af;'>—</td>"
+        color, bg = CATEGORIE_COLORS.get(categorie, (COLOR_MUTED, "#f3f4f6"))
+        label = CATEGORIE_LABELS.get(categorie, categorie)
+        unite = "" if abs(valeur) < 5 else "ms"  # heuristique simple: CLS est petit, le reste est en ms
+        display = f"{valeur:.2f}" if unite == "" else f"{round(valeur)}{unite}"
+        return f"""<td style="text-align:right;">
+            <span class="badge" style="background-color:{bg}; color:{color};">{display} · {label}</span>
+        </td>"""
+
+    def rows_pages(pages):
+        if not pages:
+            return _empty_row(5)
+        html = ""
+        for i, p in enumerate(pages):
+            bg = "#ffffff" if i % 2 == 0 else "#f9fafb"
+            html += f"""
+            <tr style="background-color:{bg};">
+                <td style="color:{COLOR_ACCENT};">{p['page_url'][:45]}</td>
+                {metric_cell(p['lcp'], p['lcp_categorie'])}
+                {metric_cell(p['inp'], p['inp_categorie'])}
+                {metric_cell(p['cls'], p['cls_categorie'])}
+                {metric_cell(p['fcp'], p['fcp_categorie'])}
+            </tr>"""
+        return html
+
+    body = f"""
+        {_section_title("Overview")}
+        <table style="width:100%; margin-top:14px;"><tr>
+            {_kpi_card("Pages analysées", str(s['total_pages_analysees']))}
+            {_kpi_card("Bonnes", str(s['nb_pages_bonnes']), COLOR_GREEN)}
+            {_kpi_card("À améliorer", str(s['nb_pages_a_ameliorer']), COLOR_AMBER)}
+            {_kpi_card("Faibles", str(s['nb_pages_faibles']), COLOR_RED)}
+        </tr></table>
+
+        {_section_title("Détail par page")}
+        <table class="data-table">
+            <tr>
+                <th>Page</th>
+                <th style="text-align:right;">LCP</th>
+                <th style="text-align:right;">INP</th>
+                <th style="text-align:right;">CLS</th>
+                <th style="text-align:right;">FCP</th>
+            </tr>
+            {rows_pages(report['pages'])}
+        </table>
+
+        <p class="footer">NexRank — Core Web Vitals Report. Data from Chrome UX Report &amp; PageSpeed Insights.</p>
+    """
+
+    html = f"""<html><head>{_base_css()}</head><body>
+        {_cover("Core Web Vitals", "Site Speed &amp; Experience Report", report['site'])}
+        {body}
+    </div></body></html>"""
+    return _render_pdf(html)
+
+
+# ==================== RAPPORT RECOMMANDATIONS SEUL ====================
+
+def generate_recommendations_pdf(report: dict) -> bytes:
+    s = report["summary"]
+
+    def rows_recos(recos):
+        if not recos:
+            return _empty_row(1)
+        html = ""
+        for r in recos:
+            color, bg = SEVERITY_COLORS.get(r["severity"], (COLOR_MUTED, "#f3f4f6"))
+            sev_label = SEVERITY_LABELS.get(r["severity"], r["severity"])
+            status_label = STATUS_LABELS.get(r["status"], r["status"])
+            impact = f"<div style='font-size:8.5px; color:{COLOR_MUTED}; margin-top:4px;'>Impact estimé : {r['estimated_impact']}</div>" if r["estimated_impact"] else ""
+            html += f"""
+            <div style="border:1px solid {COLOR_BORDER}; border-left:3px solid {color};
+                        border-radius:2px; padding:10px 12px; margin-bottom:8px;">
+                <table style="width:100%;"><tr>
+                    <td style="font-weight:bold; font-size:10.5px;">{r['title']}</td>
+                    <td style="text-align:right; white-space:nowrap;">
+                        <span class="badge" style="background-color:{bg}; color:{color};">{sev_label}</span>
+                        <span class="badge" style="background-color:#f3f4f6; color:{COLOR_MUTED}; margin-left:4px;">{status_label}</span>
+                    </td>
+                </tr></table>
+                <div style="font-size:9px; color:{COLOR_TEXT}; margin-top:6px; line-height:1.5;">{r['reasoning']}</div>
+                {impact}
+            </div>"""
+        return html
+
+    body = f"""
+        {_section_title("Overview")}
+        <table style="width:100%; margin-top:14px;"><tr>
+            {_kpi_card("Total", str(s['total']))}
+            {_kpi_card("Critiques", str(s['nb_critical']), COLOR_RED)}
+            {_kpi_card("Importantes", str(s['nb_important']), COLOR_AMBER)}
+            {_kpi_card("Opportunités", str(s['nb_opportunity']), COLOR_ACCENT)}
+        </tr></table>
+
+        {_section_title("Statut")}
+        <table style="width:100%; margin-top:14px;"><tr>
+            {_kpi_card("Ouvertes", str(s['nb_open']), COLOR_AMBER, width="33%")}
+            {_kpi_card("Résolues", str(s['nb_done']), COLOR_GREEN, width="33%")}
+            {_kpi_card("Ignorées", str(s['nb_dismissed']), COLOR_MUTED, width="33%")}
+        </tr></table>
+
+        {_section_title("Détail des recommandations")}
+        <div style="margin-top:12px;">{rows_recos(report['recommendations'])}</div>
+
+        <p class="footer">NexRank — AI-Generated SEO Recommendations Report.</p>
+    """
+
+    html = f"""<html><head>{_base_css()}</head><body>
+        {_cover("AI Insights", "SEO Recommendations Report", report['site'])}
+        {body}
+    </div></body></html>"""
+    return _render_pdf(html)

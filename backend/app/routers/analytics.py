@@ -16,6 +16,18 @@ from app.models.ga4_metric import Ga4Metric
 from app.services.google_service import GoogleService
 from fastapi.responses import Response
 from app.services.pdf_report import generate_pdf
+from datetime import datetime, timedelta
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func, cast, Date
+from uuid import UUID
+from fastapi.responses import Response
+
+from app.core.database import get_db
+from app.utils.auth import get_current_user
+from app.schemas.report import GscReport, Ga4Report
+from app.services.pdf_report import generate_gsc_pdf, generate_ga4_pdf
+
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
@@ -305,4 +317,188 @@ async def get_site_report_pdf(
         headers={
             "Content-Disposition": f'attachment; filename="report-{report_data["site"]}.pdf"'
         },
+    )
+
+
+
+async def _get_owned_site(site_id: UUID, current_user: User, db: AsyncSession) -> Site:
+    result = await db.execute(
+        select(Site).where(Site.id == site_id, Site.user_id == current_user.id)
+    )
+    site = result.scalar_one_or_none()
+    if not site:
+        raise HTTPException(status_code=404, detail="Site non trouvé")
+    return site
+
+
+# ==================== RAPPORT GSC ====================
+
+@router.get("/sites/{site_id}/report/gsc", response_model=GscReport)
+async def get_gsc_report(
+    site_id: UUID,
+    days: int = 30,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    site = await _get_owned_site(site_id, current_user, db)
+    period_start = datetime.utcnow() - timedelta(days=days)
+
+    summary_result = await db.execute(
+        select(
+            func.coalesce(func.sum(GscMetric.clicks), 0),
+            func.coalesce(func.sum(GscMetric.impressions), 0),
+            func.avg(GscMetric.position),
+            func.avg(GscMetric.ctr),
+        ).where(GscMetric.site_id == site_id, GscMetric.time >= period_start)
+    )
+    clicks, impressions, avg_position, avg_ctr = summary_result.one()
+
+    top_keywords_result = await db.execute(
+        select(
+            GscMetric.keyword,
+            func.sum(GscMetric.clicks).label("clicks"),
+            func.avg(GscMetric.position).label("position"),
+        )
+        .where(GscMetric.site_id == site_id, GscMetric.keyword.isnot(None), GscMetric.time >= period_start)
+        .group_by(GscMetric.keyword)
+        .order_by(func.sum(GscMetric.clicks).desc())
+        .limit(15)
+    )
+    top_keywords = [
+        {"keyword": r.keyword, "clicks": r.clicks, "position": float(r.position) if r.position else None}
+        for r in top_keywords_result.all()
+    ]
+
+    top_pages_result = await db.execute(
+        select(
+            GscMetric.page_url,
+            func.sum(GscMetric.clicks).label("clicks"),
+            func.sum(GscMetric.impressions).label("impressions"),
+        )
+        .where(GscMetric.site_id == site_id, GscMetric.time >= period_start)
+        .group_by(GscMetric.page_url)
+        .order_by(func.sum(GscMetric.clicks).desc())
+        .limit(15)
+    )
+    top_pages = [
+        {"page_url": r.page_url, "clicks": r.clicks, "impressions": r.impressions}
+        for r in top_pages_result.all()
+    ]
+
+    trend_result = await db.execute(
+        select(
+            cast(GscMetric.time, Date).label("day"),
+            func.coalesce(func.sum(GscMetric.clicks), 0).label("clicks"),
+        )
+        .where(GscMetric.site_id == site_id, GscMetric.time >= period_start)
+        .group_by(cast(GscMetric.time, Date))
+        .order_by(cast(GscMetric.time, Date))
+    )
+    daily_trend = [{"date": str(r.day), "clicks": r.clicks} for r in trend_result.all()]
+
+    return {
+        "site": site.domain,
+        "period": f"{period_start.strftime('%d/%m/%Y')} - {datetime.utcnow().strftime('%d/%m/%Y')}",
+        "summary": {
+            "total_clicks": clicks,
+            "total_impressions": impressions,
+            "avg_position": float(avg_position) if avg_position else None,
+            "avg_ctr": float(avg_ctr) if avg_ctr else None,
+        },
+        "top_keywords": top_keywords,
+        "top_pages": top_pages,
+        "daily_trend": daily_trend,
+    }
+
+
+@router.get("/sites/{site_id}/report/gsc/pdf")
+async def get_gsc_report_pdf(
+    site_id: UUID,
+    days: int = 30,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    report_data = await get_gsc_report(site_id, days, current_user, db)
+    pdf_bytes = generate_gsc_pdf(report_data)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="rapport-gsc-{report_data["site"]}.pdf"'},
+    )
+
+
+# ==================== RAPPORT GA4 ====================
+
+@router.get("/sites/{site_id}/report/ga4", response_model=Ga4Report)
+async def get_ga4_report(
+    site_id: UUID,
+    days: int = 30,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    site = await _get_owned_site(site_id, current_user, db)
+    period_start = datetime.utcnow() - timedelta(days=days)
+
+    summary_result = await db.execute(
+        select(
+            func.coalesce(func.sum(Ga4Metric.sessions), 0),
+            func.coalesce(func.sum(Ga4Metric.users), 0),
+            func.coalesce(func.sum(Ga4Metric.pageviews), 0),
+        ).where(Ga4Metric.site_id == site_id, Ga4Metric.time >= period_start)
+    )
+    sessions, users, pageviews = summary_result.one()
+
+    top_pages_result = await db.execute(
+        select(
+            Ga4Metric.page_url,
+            func.sum(Ga4Metric.sessions).label("sessions"),
+            func.sum(Ga4Metric.pageviews).label("pageviews"),
+        )
+        .where(Ga4Metric.site_id == site_id, Ga4Metric.time >= period_start)
+        .group_by(Ga4Metric.page_url)
+        .order_by(func.sum(Ga4Metric.sessions).desc())
+        .limit(15)
+    )
+    top_pages = [
+        {"page_url": r.page_url, "sessions": r.sessions, "pageviews": r.pageviews}
+        for r in top_pages_result.all()
+    ]
+
+    trend_result = await db.execute(
+        select(
+            cast(Ga4Metric.time, Date).label("day"),
+            func.coalesce(func.sum(Ga4Metric.sessions), 0).label("sessions"),
+        )
+        .where(Ga4Metric.site_id == site_id, Ga4Metric.time >= period_start)
+        .group_by(cast(Ga4Metric.time, Date))
+        .order_by(cast(Ga4Metric.time, Date))
+    )
+    daily_trend = [{"date": str(r.day), "sessions": r.sessions} for r in trend_result.all()]
+
+    return {
+        "site": site.domain,
+        "period": f"{period_start.strftime('%d/%m/%Y')} - {datetime.utcnow().strftime('%d/%m/%Y')}",
+        "summary": {
+            "total_sessions": sessions,
+            "total_users": users,
+            "total_pageviews": pageviews,
+        },
+        "top_pages": top_pages,
+        "daily_trend": daily_trend,
+    }
+
+
+@router.get("/sites/{site_id}/report/ga4/pdf")
+async def get_ga4_report_pdf(
+    site_id: UUID,
+    days: int = 30,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    report_data = await get_ga4_report(site_id, days, current_user, db)
+    pdf_bytes = generate_ga4_pdf(report_data)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="rapport-ga4-{report_data["site"]}.pdf"'},
     )
