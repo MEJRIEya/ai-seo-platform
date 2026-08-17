@@ -6,3 +6,4 @@ from app.models.gsc_metric import GscMetric
 from app.models.ga4_metric import Ga4Metric
 from app.models.recommendation import Recommendation
 from app.models.core_web_vital import CoreWebVital
+from app.models.subscription import Subscription

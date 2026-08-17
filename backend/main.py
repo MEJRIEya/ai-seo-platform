@@ -32,6 +32,8 @@ from app.routers.analytics import router as analytics_router
 from app.routers import auth_google
 from app.routers.auth_google import router as auth_google_router  
 from app.routers.reports import router as reports_router
+from app.routers import billing
+
 
 
 
@@ -61,7 +63,7 @@ app.include_router(analytics_router)
 app.include_router(recommendations.router)
 app.include_router(core_web_vitals_router)  
 app.include_router(auth_google.router)
-
+app.include_router(billing.router)
 
 
 

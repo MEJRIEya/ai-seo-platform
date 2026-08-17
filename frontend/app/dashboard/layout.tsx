@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { apiFetch } from "@/lib/api";
 
 type NavItem = { name: string; href: string };
 type NavGroup = { label: string; items: NavItem[] };
@@ -46,6 +47,7 @@ const toolkits: Toolkit[] = [
         label: "Account",
         items: [
           { name: "Sites", href: "/dashboard/sites" },
+          { name: "Billing", href: "/dashboard/billing" },
           { name: "Settings", href: "/dashboard/settings" },
         ],
       },
@@ -106,6 +108,12 @@ function getActiveToolkit(pathname: string): string {
   return "seo";
 }
 
+interface SubscriptionInfo {
+  plan: string;
+  status: string;
+  has_used_trial: boolean;
+}
+
 export default function DashboardLayout({
   children,
 }: {
@@ -116,11 +124,46 @@ export default function DashboardLayout({
   const [activeToolkit, setActiveToolkit] = useState(getActiveToolkit(pathname));
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
+  const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
+  const [trialLoading, setTrialLoading] = useState(false);
+  const [trialError, setTrialError] = useState("");
+
   useEffect(() => {
     setActiveToolkit(getActiveToolkit(pathname));
   }, [pathname]);
 
+  // Charge le statut d'abonnement une seule fois au montage du layout
+  useEffect(() => {
+    const fetchSubscription = async () => {
+      try {
+        const data: SubscriptionInfo = await apiFetch("/billing/subscription");
+        setSubscription(data);
+      } catch {
+        // Silencieux : si l'appel échoue, on n'affiche simplement pas le bouton d'essai
+      }
+    };
+    fetchSubscription();
+  }, []);
+
+  const handleStartTrial = async () => {
+    setTrialLoading(true);
+    setTrialError("");
+    try {
+      const data: { checkout_url: string } = await apiFetch("/billing/start-trial", {
+        method: "POST",
+      });
+      window.location.href = data.checkout_url;
+    } catch (err: any) {
+      setTrialError(err.message || "Impossible de démarrer l'essai");
+      setTrialLoading(false);
+    }
+  };
+
   const current = toolkits.find((t) => t.id === activeToolkit) || toolkits[0];
+
+  // Le bouton n'apparaît que si l'utilisateur est encore Free et n'a jamais utilisé son essai
+  const showTrialButton =
+    subscription && subscription.plan === "free" && !subscription.has_used_trial;
 
   return (
     <div className="h-screen flex overflow-hidden bg-[#f4f5f7]">
@@ -277,9 +320,26 @@ export default function DashboardLayout({
           </div>
 
           <div className="flex items-center gap-3 shrink-0">
-            <button className="hidden sm:inline-flex text-sm font-medium bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded-md transition">
-              Start free trial
-            </button>
+            {trialError && (
+              <span className="hidden md:inline text-xs text-red-600">{trialError}</span>
+            )}
+
+            {showTrialButton && (
+              <button
+                onClick={handleStartTrial}
+                disabled={trialLoading}
+                className="hidden sm:inline-flex text-sm font-medium bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded-md transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {trialLoading ? "Redirecting..." : "Start free trial"}
+              </button>
+            )}
+
+            {subscription?.plan === "pro" && (
+              <span className="hidden sm:inline-flex items-center text-xs font-semibold bg-green-50 text-green-700 px-3 py-1.5 rounded-md">
+                {subscription.status === "trialing" ? "Trial active" : "Pro plan"}
+              </span>
+            )}
+
             <button
               onClick={() => router.push("/dashboard/sites")}
               className="text-sm bg-gray-900 text-white px-4 py-1.5 rounded-md hover:bg-gray-800 transition"

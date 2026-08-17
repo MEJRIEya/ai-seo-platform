@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 
 interface User {
@@ -17,10 +18,32 @@ interface GoogleAccount {
   google_email: string;
 }
 
+interface SubscriptionInfo {
+  plan: string;
+  status: string;
+  current_period_end: string | null;
+  has_used_trial: boolean;
+  limits: {
+    name: string;
+    max_sites: number;
+    ai_recommendations: boolean;
+    pdf_export: boolean;
+    price_display: string;
+  };
+}
+
 const ACCOUNTS_PER_PAGE = 5;
+
+const STATUS_LABELS: Record<string, string> = {
+  active: "Actif",
+  trialing: "Essai en cours",
+  past_due: "Paiement en retard",
+  canceled: "Annulé",
+};
 
 export default function SettingsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
   const [accounts, setAccounts] = useState<GoogleAccount[]>([]);
@@ -35,6 +58,9 @@ export default function SettingsPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [savingPassword, setSavingPassword] = useState(false);
+
+  const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
+  const [portalLoading, setPortalLoading] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -55,6 +81,13 @@ export default function SettingsPage() {
         } catch {
           setAccounts([]);
         }
+
+        try {
+          const sub: SubscriptionInfo = await apiFetch("/billing/subscription");
+          setSubscription(sub);
+        } catch {
+          setSubscription(null);
+        }
       } catch (err: any) {
         setError(err.message);
       } finally {
@@ -64,6 +97,16 @@ export default function SettingsPage() {
 
     load();
   }, [router]);
+
+  // Gère le retour depuis Stripe Checkout (?billing=success | ?billing=cancelled)
+  useEffect(() => {
+    const billingParam = searchParams.get("billing");
+    if (billingParam === "success") {
+      setSuccess("Paiement confirmé — votre abonnement est en cours d'activation.");
+    } else if (billingParam === "cancelled") {
+      setError("Le paiement a été annulé. Vous pouvez réessayer à tout moment.");
+    }
+  }, [searchParams]);
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,6 +171,20 @@ export default function SettingsPage() {
     window.location.href = url;
   };
 
+  const handleOpenPortal = async () => {
+    setPortalLoading(true);
+    setError("");
+    try {
+      const data: { portal_url: string } = await apiFetch("/billing/portal", {
+        method: "POST",
+      });
+      window.location.href = data.portal_url;
+    } catch (err: any) {
+      setError(err.message);
+      setPortalLoading(false);
+    }
+  };
+
   if (loading) {
     return <div className="text-gray-500">Loading...</div>;
   }
@@ -154,6 +211,66 @@ export default function SettingsPage() {
           {success}
         </div>
       )}
+
+      {/* ---------- Carte Facturation ---------- */}
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-medium text-gray-900">Abonnement</h2>
+          <Link
+            href="/dashboard/billing"
+            className="text-sm text-blue-600 hover:underline"
+          >
+            Voir les plans
+          </Link>
+        </div>
+
+        {subscription ? (
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-gray-900">
+                  {subscription.limits.name}
+                </span>
+                <span
+                  className={`text-xs px-2 py-0.5 rounded-full ${
+                    subscription.plan === "pro"
+                      ? "bg-green-50 text-green-700"
+                      : "bg-gray-100 text-gray-500"
+                  }`}
+                >
+                  {STATUS_LABELS[subscription.status] || subscription.status}
+                </span>
+              </div>
+              {subscription.current_period_end && (
+                <p className="text-xs text-gray-400 mt-1">
+                  {subscription.status === "trialing" ? "Fin de l'essai" : "Prochain renouvellement"}
+                  {": "}
+                  {new Date(subscription.current_period_end).toLocaleDateString("fr-FR")}
+                </p>
+              )}
+            </div>
+
+            {subscription.plan === "pro" ? (
+              <button
+                onClick={handleOpenPortal}
+                disabled={portalLoading}
+                className="text-sm border border-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-50 disabled:opacity-50"
+              >
+                {portalLoading ? "Redirecting..." : "Gérer mon abonnement"}
+              </button>
+            ) : (
+              <Link
+                href="/dashboard/billing"
+                className="text-sm bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700"
+              >
+                Passer Pro
+              </Link>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-gray-400">Impossible de charger votre abonnement.</p>
+        )}
+      </div>
 
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <h2 className="font-medium text-gray-900 mb-4">Profil</h2>
