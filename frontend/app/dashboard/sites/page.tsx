@@ -4,6 +4,33 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
+
 interface Site {
   id: string;
   domain: string;
@@ -17,6 +44,22 @@ interface GoogleAccount {
   id: string;
   google_email: string;
   connected_at: string;
+}
+
+function ConnectionBadge({ connected }: { connected: boolean }) {
+  if (connected) {
+    return (
+      <Badge variant="secondary" className="bg-green-50 text-green-700 hover:bg-green-50 gap-1.5">
+        <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+        Connecté
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="secondary" className="bg-gray-100 text-gray-500 hover:bg-gray-100">
+      Non connecté
+    </Badge>
+  );
 }
 
 export default function SitesPage() {
@@ -49,7 +92,6 @@ export default function SitesPage() {
 
   const fetchGoogleAccounts = async () => {
     try {
-      // Adapte si ton endpoint est différent
       const data: GoogleAccount[] = await apiFetch("/google/accounts").catch(() => []);
       setGoogleAccounts(data);
       if (data.length > 0 && !googleAccountId) {
@@ -119,7 +161,6 @@ export default function SitesPage() {
   };
 
   const handleConnectGoogle = () => {
-    // Redirige vers le flow OAuth backend
     window.location.href = "http://127.0.0.1:8000/google/connect";
   };
 
@@ -139,18 +180,10 @@ export default function SitesPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={handleConnectGoogle}
-            className="text-sm border border-gray-300 bg-white text-gray-700 px-4 py-2 rounded-md hover:bg-gray-50 transition"
-          >
+          <Button variant="outline" onClick={handleConnectGoogle}>
             Connecter Google
-          </button>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="text-sm bg-gray-900 text-white px-4 py-2 rounded-md hover:bg-gray-800 transition"
-          >
-            + Ajouter un site
-          </button>
+          </Button>
+          <Button onClick={() => setShowAddModal(true)}>+ Ajouter un site</Button>
         </div>
       </div>
 
@@ -164,163 +197,133 @@ export default function SitesPage() {
       )}
 
       {/* Liste des sites */}
-      <div className="bg-white rounded-lg border border-gray-200">
+      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
         {sites.length === 0 ? (
           <div className="p-12 text-center text-gray-400">
             <p className="mb-1">Aucun site pour le moment</p>
             <p className="text-sm">Ajoutez votre premier site pour commencer</p>
           </div>
         ) : (
-          <div className="divide-y divide-gray-100">
-            <div className="px-5 py-3 grid grid-cols-12 gap-4 text-xs font-medium text-gray-400">
-              <div className="col-span-4">Domain</div>
-              <div className="col-span-3">Search Console</div>
-              <div className="col-span-3">Google Analytics</div>
-              <div className="col-span-2 text-right">Actions</div>
-            </div>
-
-            {sites.map((site) => (
-              <div
-                key={site.id}
-                className="px-5 py-4 grid grid-cols-12 gap-4 items-center hover:bg-gray-50"
-              >
-                <div className="col-span-4">
-                  <p className="text-sm font-medium text-gray-900">{site.domain}</p>
-                  <p className="text-xs text-gray-400">
-                    Ajouté le{" "}
-                    {new Date(site.created_at).toLocaleDateString("fr-FR")}
-                  </p>
-                </div>
-
-                <div className="col-span-3">
-                  {site.gsc_property_url ? (
-                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-50 px-2 py-1 rounded-full">
-                      <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-                      Connecté
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-                      Non connecté
-                    </span>
-                  )}
-                </div>
-
-                <div className="col-span-3">
-                  {site.ga4_property_id ? (
-                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-50 px-2 py-1 rounded-full">
-                      <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-                      Connecté
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-                      Non connecté
-                    </span>
-                  )}
-                </div>
-
-                <div className="col-span-2 flex justify-end gap-2">
-                  <button
-                    onClick={() => handleDelete(site.id)}
-                    disabled={deletingId === site.id}
-                    className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded transition disabled:opacity-40"
-                  >
-                    {deletingId === site.id ? "..." : "Supprimer"}
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Domain</TableHead>
+                <TableHead>Search Console</TableHead>
+                <TableHead>Google Analytics</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {sites.map((site) => (
+                <TableRow key={site.id}>
+                  <TableCell>
+                    <p className="text-sm font-medium text-gray-900">{site.domain}</p>
+                    <p className="text-xs text-gray-400">
+                      Ajouté le{" "}
+                      {new Date(site.created_at).toLocaleDateString("fr-FR")}
+                    </p>
+                  </TableCell>
+                  <TableCell>
+                    <ConnectionBadge connected={!!site.gsc_property_url} />
+                  </TableCell>
+                  <TableCell>
+                    <ConnectionBadge connected={!!site.ga4_property_id} />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDelete(site.id)}
+                      disabled={deletingId === site.id}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                    >
+                      {deletingId === site.id ? "..." : "Supprimer"}
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         )}
       </div>
 
       {/* Modal Ajouter un site */}
-      {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">
-              Ajouter un site
-            </h2>
+      <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Ajouter un site</DialogTitle>
+          </DialogHeader>
 
-            <form onSubmit={handleAddSite} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Domaine *
-                </label>
-                <input
-                  type="text"
-                  value={domain}
-                  onChange={(e) => setDomain(e.target.value)}
-                  required
-                  placeholder="www.exemple.com"
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+          <form onSubmit={handleAddSite} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="domain">Domaine *</Label>
+              <Input
+                id="domain"
+                value={domain}
+                onChange={(e) => setDomain(e.target.value)}
+                required
+                placeholder="www.exemple.com"
+              />
+            </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  URL propriété GSC
-                </label>
-                <input
-                  type="text"
-                  value={gscPropertyUrl}
-                  onChange={(e) => setGscPropertyUrl(e.target.value)}
-                  placeholder="https://www.exemple.com/ ou sc-domain:exemple.com"
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="gsc">URL propriété GSC</Label>
+              <Input
+                id="gsc"
+                value={gscPropertyUrl}
+                onChange={(e) => setGscPropertyUrl(e.target.value)}
+                placeholder="https://www.exemple.com/ ou sc-domain:exemple.com"
+              />
+            </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  ID propriété GA4
-                </label>
-                <input
-                  type="text"
-                  value={ga4PropertyId}
-                  onChange={(e) => setGa4PropertyId(e.target.value)}
-                  placeholder="123456789"
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="ga4">ID propriété GA4</Label>
+              <Input
+                id="ga4"
+                value={ga4PropertyId}
+                onChange={(e) => setGa4PropertyId(e.target.value)}
+                placeholder="123456789"
+              />
+            </div>
 
-              {googleAccounts.length > 0 && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Compte Google
-                  </label>
-                  <select
-                    value={googleAccountId}
-                    onChange={(e) => setGoogleAccountId(e.target.value)}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-white"
-                  >
+            {googleAccounts.length > 0 && (
+              <div className="space-y-1.5">
+                <Label>Compte Google</Label>
+                <Select value={googleAccountId} onValueChange={setGoogleAccountId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sélectionner un compte">
+                      {() =>
+                        googleAccounts.find((a) => a.id === googleAccountId)
+                          ?.google_email
+                      }
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
                     {googleAccounts.map((acc) => (
-                      <option key={acc.id} value={acc.id}>
+                      <SelectItem key={acc.id} value={acc.id}>
                         {acc.google_email || acc.id}
-                      </option>
+                      </SelectItem>
                     ))}
-                  </select>
-                </div>
-              )}
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 rounded-md"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting || !domain.trim()}
-                  className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-800 disabled:opacity-40"
-                >
-                  {submitting ? "Ajout..." : "Ajouter"}
-                </button>
+                  </SelectContent>
+                </Select>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+            )}
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setShowAddModal(false)}
+              >
+                Annuler
+              </Button>
+              <Button type="submit" disabled={submitting || !domain.trim()}>
+                {submitting ? "Ajout..." : "Ajouter"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -63,9 +63,7 @@ export default function PerformancePage() {
       try {
         const sitesData: Site[] = await apiFetch("/sites/");
         setSites(sitesData);
-        if (sitesData.length > 0) {
-          setSelectedSiteId(sitesData[0].id);
-        }
+        if (sitesData.length > 0) setSelectedSiteId(sitesData[0].id);
       } catch (err: any) {
         setError(err.message);
       } finally {
@@ -99,21 +97,20 @@ export default function PerformancePage() {
   }, [selectedSiteId]);
 
   if (loading) {
-    return <div className="text-gray-500">Loading...</div>;
+    return <div className="text-muted-foreground">Loading...</div>;
   }
 
   const selectedSite = sites.find((s) => s.id === selectedSiteId);
 
   return (
     <div className="space-y-6">
-      {/* Header + site selector */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-xl font-semibold text-gray-900">Site Performance</h1>
+        <h1 className="text-xl font-semibold text-foreground">Site Performance</h1>
 
         <select
           value={selectedSiteId}
           onChange={(e) => setSelectedSiteId(e.target.value)}
-          className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white text-gray-900 min-w-[220px]"
+          className="border border-input rounded-md px-3 py-2 text-sm bg-background text-foreground min-w-[220px]"
         >
           {sites.length === 0 && <option value="">No sites</option>}
           {sites.map((site) => (
@@ -125,78 +122,76 @@ export default function PerformancePage() {
       </div>
 
       {error && (
-        <div className="bg-red-50 text-red-600 text-sm p-3 rounded-md">{error}</div>
+        <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md">
+          {error}
+        </div>
       )}
 
       {sites.length === 0 ? (
-        <div className="bg-white rounded-lg border border-gray-200 p-10 text-center text-gray-400">
+        <div className="bg-card rounded-lg border border-border p-10 text-center text-muted-foreground">
           No sites yet. Add one from the Sites page.
         </div>
       ) : reportLoading ? (
-        <div className="text-gray-500">Loading report...</div>
+        <div className="text-muted-foreground">Loading report...</div>
       ) : (
         <>
-          {/* KPI cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-4">
-            <div className="bg-white rounded-lg border border-gray-200 p-5">
-              <p className="text-sm text-gray-500 mb-1">Clicks</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {report?.gsc_summary.total_clicks.toLocaleString() ?? "-"}
-              </p>
-            </div>
-            <div className="bg-white rounded-lg border border-gray-200 p-5">
-              <p className="text-sm text-gray-500 mb-1">Impressions</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {report?.gsc_summary.total_impressions.toLocaleString() ?? "-"}
-              </p>
-            </div>
-            <div className="bg-white rounded-lg border border-gray-200 p-5">
-              <p className="text-sm text-gray-500 mb-1">Avg. Position</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {report?.gsc_summary.avg_position?.toFixed(1) ?? "-"}
-              </p>
-            </div>
-            <div className="bg-white rounded-lg border border-gray-200 p-5">
-              <p className="text-sm text-gray-500 mb-1">Avg. CTR</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {report?.gsc_summary.avg_ctr
+            {[
+              {
+                label: "Clicks",
+                value: report?.gsc_summary.total_clicks.toLocaleString() ?? "-",
+              },
+              {
+                label: "Impressions",
+                value: report?.gsc_summary.total_impressions.toLocaleString() ?? "-",
+              },
+              {
+                label: "Avg. Position",
+                value: report?.gsc_summary.avg_position?.toFixed(1) ?? "-",
+              },
+              {
+                label: "Avg. CTR",
+                value: report?.gsc_summary.avg_ctr
                   ? `${(report.gsc_summary.avg_ctr * 100).toFixed(2)}%`
-                  : "-"}
-              </p>
-            </div>
-            <div className="bg-white rounded-lg border border-gray-200 p-5">
-              <p className="text-sm text-gray-500 mb-1">Sessions</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {report?.ga4_summary.total_sessions.toLocaleString() ?? "-"}
-              </p>
-            </div>
-            <div className="bg-white rounded-lg border border-gray-200 p-5">
-              <p className="text-sm text-gray-500 mb-1">Users</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {report?.ga4_summary.total_users.toLocaleString() ?? "-"}
-              </p>
-            </div>
+                  : "-",
+              },
+              {
+                label: "Sessions",
+                value: report?.ga4_summary.total_sessions.toLocaleString() ?? "-",
+              },
+              {
+                label: "Users",
+                value: report?.ga4_summary.total_users.toLocaleString() ?? "-",
+              },
+            ].map((kpi) => (
+              <div key={kpi.label} className="bg-card rounded-lg border border-border p-5">
+                <p className="text-sm text-muted-foreground mb-1">{kpi.label}</p>
+                <p className="text-2xl font-semibold text-foreground">{kpi.value}</p>
+              </div>
+            ))}
           </div>
 
-          {/* Trend chart */}
-          <div className="bg-white rounded-lg border border-gray-200 p-5">
-            <h2 className="font-medium text-gray-900 mb-4">
+          <div className="bg-card rounded-lg border border-border p-5">
+            <h2 className="font-medium text-foreground mb-4">
               Clicks & Sessions Trend
               {selectedSite && (
-                <span className="text-gray-400 font-normal"> — {selectedSite.domain}</span>
+                <span className="text-muted-foreground font-normal">
+                  {" "}
+                  — {selectedSite.domain}
+                </span>
               )}
             </h2>
             {!report || report.daily_trend.length === 0 ? (
-              <div className="text-sm text-gray-400 py-8 text-center">
+              <div className="text-sm text-muted-foreground py-8 text-center">
                 No trend data yet
               </div>
             ) : (
               <ResponsiveContainer width="100%" height={300}>
                 <LineChart data={report.daily_trend}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                   <XAxis
                     dataKey="date"
-                    tick={{ fontSize: 12, fill: "#9ca3af" }}
+                    tick={{ fontSize: 12, fill: "var(--muted-foreground)" }}
                     tickFormatter={(value) =>
                       new Date(value).toLocaleDateString("fr-FR", {
                         day: "2-digit",
@@ -204,13 +199,22 @@ export default function PerformancePage() {
                       })
                     }
                   />
-                  <YAxis yAxisId="left" tick={{ fontSize: 12, fill: "#9ca3af" }} />
+                  <YAxis
+                    yAxisId="left"
+                    tick={{ fontSize: 12, fill: "var(--muted-foreground)" }}
+                  />
                   <YAxis
                     yAxisId="right"
                     orientation="right"
-                    tick={{ fontSize: 12, fill: "#9ca3af" }}
+                    tick={{ fontSize: 12, fill: "var(--muted-foreground)" }}
                   />
                   <Tooltip
+                    contentStyle={{
+                      background: "var(--popover)",
+                      border: "1px solid var(--border)",
+                      borderRadius: "8px",
+                      color: "var(--popover-foreground)",
+                    }}
                     labelFormatter={(value) =>
                       new Date(value).toLocaleDateString("fr-FR")
                     }
@@ -221,7 +225,7 @@ export default function PerformancePage() {
                     type="monotone"
                     dataKey="clicks"
                     name="Clics (GSC)"
-                    stroke="#2563eb"
+                    stroke="var(--chart-1)"
                     strokeWidth={2}
                     dot={false}
                   />
@@ -230,7 +234,7 @@ export default function PerformancePage() {
                     type="monotone"
                     dataKey="sessions"
                     name="Sessions (GA4)"
-                    stroke="#22c55e"
+                    stroke="var(--chart-2)"
                     strokeWidth={2}
                     dot={false}
                   />
@@ -239,46 +243,34 @@ export default function PerformancePage() {
             )}
           </div>
 
-          {/* Tabbed tables */}
-          <div className="bg-white rounded-lg border border-gray-200">
-            <div className="flex border-b border-gray-100">
-              <button
-                onClick={() => setActiveTab("keywords")}
-                className={`px-5 py-3 text-sm font-medium border-b-2 transition ${
-                  activeTab === "keywords"
-                    ? "border-blue-600 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-800"
-                }`}
-              >
-                Top Keywords
-              </button>
-              <button
-                onClick={() => setActiveTab("pages_gsc")}
-                className={`px-5 py-3 text-sm font-medium border-b-2 transition ${
-                  activeTab === "pages_gsc"
-                    ? "border-blue-600 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-800"
-                }`}
-              >
-                Top Pages (Search)
-              </button>
-              <button
-                onClick={() => setActiveTab("pages_ga4")}
-                className={`px-5 py-3 text-sm font-medium border-b-2 transition ${
-                  activeTab === "pages_ga4"
-                    ? "border-blue-600 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-800"
-                }`}
-              >
-                Top Pages (Traffic)
-              </button>
+          <div className="bg-card rounded-lg border border-border">
+            <div className="flex border-b border-border">
+              {(
+                [
+                  ["keywords", "Top Keywords"],
+                  ["pages_gsc", "Top Pages (Search)"],
+                  ["pages_ga4", "Top Pages (Traffic)"],
+                ] as [TabKey, string][]
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setActiveTab(key)}
+                  className={`px-5 py-3 text-sm font-medium border-b-2 transition ${
+                    activeTab === key
+                      ? "border-primary text-primary"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
 
             <div className="p-2">
               {activeTab === "keywords" && (
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-xs text-gray-400 font-medium">
+                    <tr className="text-xs text-muted-foreground font-medium">
                       <th className="text-left px-3 py-2">Keyword</th>
                       <th className="text-right px-3 py-2">Position</th>
                       <th className="text-right px-3 py-2">Clicks</th>
@@ -287,18 +279,23 @@ export default function PerformancePage() {
                   <tbody>
                     {(!report || report.top_keywords_gsc.length === 0) && (
                       <tr>
-                        <td colSpan={3} className="px-3 py-6 text-center text-gray-400">
+                        <td colSpan={3} className="px-3 py-6 text-center text-muted-foreground">
                           No keyword data yet
                         </td>
                       </tr>
                     )}
                     {report?.top_keywords_gsc.map((kw) => (
-                      <tr key={kw.keyword} className="border-t border-gray-50 hover:bg-gray-50">
-                        <td className="px-3 py-2.5 text-blue-600">{kw.keyword}</td>
-                        <td className="px-3 py-2.5 text-right text-gray-700">
+                      <tr
+                        key={kw.keyword}
+                        className="border-t border-border hover:bg-muted"
+                      >
+                        <td className="px-3 py-2.5 text-primary">{kw.keyword}</td>
+                        <td className="px-3 py-2.5 text-right text-foreground">
                           {kw.position?.toFixed(1) ?? "-"}
                         </td>
-                        <td className="px-3 py-2.5 text-right text-gray-700">{kw.clicks}</td>
+                        <td className="px-3 py-2.5 text-right text-foreground">
+                          {kw.clicks}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -308,7 +305,7 @@ export default function PerformancePage() {
               {activeTab === "pages_gsc" && (
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-xs text-gray-400 font-medium">
+                    <tr className="text-xs text-muted-foreground font-medium">
                       <th className="text-left px-3 py-2">Page</th>
                       <th className="text-right px-3 py-2">Clicks</th>
                       <th className="text-right px-3 py-2">Impressions</th>
@@ -317,18 +314,23 @@ export default function PerformancePage() {
                   <tbody>
                     {(!report || report.top_pages_gsc.length === 0) && (
                       <tr>
-                        <td colSpan={3} className="px-3 py-6 text-center text-gray-400">
+                        <td colSpan={3} className="px-3 py-6 text-center text-muted-foreground">
                           No page data yet
                         </td>
                       </tr>
                     )}
                     {report?.top_pages_gsc.map((p) => (
-                      <tr key={p.page_url} className="border-t border-gray-50 hover:bg-gray-50">
-                        <td className="px-3 py-2.5 text-blue-600 truncate max-w-[420px]">
+                      <tr
+                        key={p.page_url}
+                        className="border-t border-border hover:bg-muted"
+                      >
+                        <td className="px-3 py-2.5 text-primary truncate max-w-[420px]">
                           {p.page_url}
                         </td>
-                        <td className="px-3 py-2.5 text-right text-gray-700">{p.clicks}</td>
-                        <td className="px-3 py-2.5 text-right text-gray-700">
+                        <td className="px-3 py-2.5 text-right text-foreground">
+                          {p.clicks}
+                        </td>
+                        <td className="px-3 py-2.5 text-right text-foreground">
                           {p.impressions}
                         </td>
                       </tr>
@@ -340,7 +342,7 @@ export default function PerformancePage() {
               {activeTab === "pages_ga4" && (
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-xs text-gray-400 font-medium">
+                    <tr className="text-xs text-muted-foreground font-medium">
                       <th className="text-left px-3 py-2">Page</th>
                       <th className="text-right px-3 py-2">Sessions</th>
                       <th className="text-right px-3 py-2">Pageviews</th>
@@ -349,18 +351,23 @@ export default function PerformancePage() {
                   <tbody>
                     {(!report || report.top_pages_ga4.length === 0) && (
                       <tr>
-                        <td colSpan={3} className="px-3 py-6 text-center text-gray-400">
+                        <td colSpan={3} className="px-3 py-6 text-center text-muted-foreground">
                           No traffic data yet
                         </td>
                       </tr>
                     )}
                     {report?.top_pages_ga4.map((p) => (
-                      <tr key={p.page_url} className="border-t border-gray-50 hover:bg-gray-50">
-                        <td className="px-3 py-2.5 text-blue-600 truncate max-w-[420px]">
+                      <tr
+                        key={p.page_url}
+                        className="border-t border-border hover:bg-muted"
+                      >
+                        <td className="px-3 py-2.5 text-primary truncate max-w-[420px]">
                           {p.page_url}
                         </td>
-                        <td className="px-3 py-2.5 text-right text-gray-700">{p.sessions}</td>
-                        <td className="px-3 py-2.5 text-right text-gray-700">
+                        <td className="px-3 py-2.5 text-right text-foreground">
+                          {p.sessions}
+                        </td>
+                        <td className="px-3 py-2.5 text-right text-foreground">
                           {p.pageviews}
                         </td>
                       </tr>

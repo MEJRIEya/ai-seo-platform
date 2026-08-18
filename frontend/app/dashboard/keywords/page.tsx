@@ -211,15 +211,15 @@ export default function KeywordOverviewPage() {
   }, [totalPages, currentPage]);
 
   if (loading) {
-    return <div className="text-gray-500">Loading...</div>;
+    return <div className="text-muted-foreground">Loading...</div>;
   }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Keyword Overview</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <h1 className="text-xl font-semibold text-foreground">Keyword Overview</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
             Performance des mots-clés · Clics, impressions, CTR · Filtres par position
           </p>
         </div>
@@ -227,7 +227,7 @@ export default function KeywordOverviewPage() {
         <select
           value={selectedSiteId}
           onChange={(e) => setSelectedSiteId(e.target.value)}
-          className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white text-gray-900 min-w-[220px]"
+          className="border border-input rounded-md px-3 py-2 text-sm bg-background text-foreground min-w-[220px]"
         >
           {sites.length === 0 && <option value="">No sites</option>}
           {sites.map((site) => (
@@ -239,46 +239,30 @@ export default function KeywordOverviewPage() {
       </div>
 
       {error && (
-        <div className="bg-red-50 text-red-600 text-sm p-3 rounded-md">{error}</div>
+        <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md">
+          {error}
+        </div>
       )}
 
       {sites.length === 0 ? (
-        <div className="bg-white rounded-lg border border-gray-200 p-10 text-center text-gray-400">
+        <div className="bg-card rounded-lg border border-border p-10 text-center text-muted-foreground">
           No sites yet. Add one from the Sites page.
         </div>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <div className="bg-white rounded-lg border border-gray-200 p-5">
-              <p className="text-sm text-gray-500 mb-1">Keywords</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {stats.total.toLocaleString()}
-              </p>
-            </div>
-            <div className="bg-white rounded-lg border border-gray-200 p-5">
-              <p className="text-sm text-gray-500 mb-1">Total Clicks</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {stats.totalClicks.toLocaleString()}
-              </p>
-            </div>
-            <div className="bg-white rounded-lg border border-gray-200 p-5">
-              <p className="text-sm text-gray-500 mb-1">Impressions</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {stats.totalImpressions.toLocaleString()}
-              </p>
-            </div>
-            <div className="bg-white rounded-lg border border-gray-200 p-5">
-              <p className="text-sm text-gray-500 mb-1">Avg. Position</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {stats.avgPos || "-"}
-              </p>
-            </div>
-            <div className="bg-white rounded-lg border border-gray-200 p-5">
-              <p className="text-sm text-gray-500 mb-1">Avg. CTR</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {stats.avgCtr ? `${stats.avgCtr}%` : "-"}
-              </p>
-            </div>
+            {[
+              { label: "Keywords", value: stats.total.toLocaleString() },
+              { label: "Total Clicks", value: stats.totalClicks.toLocaleString() },
+              { label: "Impressions", value: stats.totalImpressions.toLocaleString() },
+              { label: "Avg. Position", value: stats.avgPos || "-" },
+              { label: "Avg. CTR", value: stats.avgCtr ? `${stats.avgCtr}%` : "-" },
+            ].map((kpi) => (
+              <div key={kpi.label} className="bg-card rounded-lg border border-border p-5">
+                <p className="text-sm text-muted-foreground mb-1">{kpi.label}</p>
+                <p className="text-2xl font-semibold text-foreground">{kpi.value}</p>
+              </div>
+            ))}
           </div>
 
           <div className="flex items-center gap-3 flex-wrap">
@@ -287,30 +271,28 @@ export default function KeywordOverviewPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Rechercher un mot-clé..."
-              className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white min-w-[220px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="border border-input rounded-md px-3 py-2 text-sm bg-background text-foreground min-w-[220px] focus:outline-none focus:ring-2 focus:ring-ring"
             />
             <input
               type="number"
               value={minPosition}
               onChange={(e) => setMinPosition(e.target.value)}
               placeholder="Pos. min"
-              className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white w-28 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="border border-input rounded-md px-3 py-2 text-sm bg-background text-foreground w-28 focus:outline-none focus:ring-2 focus:ring-ring"
             />
             <input
               type="number"
               value={maxPosition}
               onChange={(e) => setMaxPosition(e.target.value)}
               placeholder="Pos. max"
-              className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white w-28 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="border border-input rounded-md px-3 py-2 text-sm bg-background text-foreground w-28 focus:outline-none focus:ring-2 focus:ring-ring"
             />
             <select
               value={sortBy}
               onChange={(e) =>
-                setSortBy(
-                  e.target.value as "clicks" | "impressions" | "position" | "ctr"
-                )
+                setSortBy(e.target.value as "clicks" | "impressions" | "position" | "ctr")
               }
-              className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white text-gray-700"
+              className="border border-input rounded-md px-3 py-2 text-sm bg-background text-foreground"
             >
               <option value="clicks">Trier par clics</option>
               <option value="impressions">Trier par impressions</option>
@@ -319,11 +301,11 @@ export default function KeywordOverviewPage() {
             </select>
           </div>
 
-          <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
+          <div className="bg-card rounded-lg border border-border overflow-x-auto">
             {metricsLoading ? (
-              <div className="p-8 text-gray-500 text-sm">Loading keywords...</div>
+              <div className="p-8 text-muted-foreground text-sm">Loading keywords...</div>
             ) : filtered.length === 0 ? (
-              <div className="p-10 text-center text-gray-400 text-sm">
+              <div className="p-10 text-center text-muted-foreground text-sm">
                 {keywordRows.length === 0
                   ? "Aucune donnée de mots-clés. Importez d'abord les données GSC."
                   : "Aucun résultat pour ces filtres."}
@@ -332,7 +314,7 @@ export default function KeywordOverviewPage() {
               <>
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-xs text-gray-400 font-medium border-b border-gray-100">
+                    <tr className="text-xs text-muted-foreground font-medium border-b border-border">
                       <th className="text-left px-5 py-3">Keyword</th>
                       <th className="text-left px-5 py-3">Page</th>
                       <th className="text-right px-5 py-3">Position</th>
@@ -343,23 +325,23 @@ export default function KeywordOverviewPage() {
                   </thead>
                   <tbody>
                     {paginatedRows.map((row) => (
-                      <tr key={row.keyword} className="border-b border-gray-50 hover:bg-gray-50">
-                        <td className="px-5 py-3 text-blue-600 font-medium max-w-[200px] truncate">
+                      <tr key={row.keyword} className="border-b border-border hover:bg-muted">
+                        <td className="px-5 py-3 text-primary font-medium max-w-[200px] truncate">
                           {row.keyword}
                         </td>
-                        <td className="px-5 py-3 text-gray-500 max-w-[240px] truncate">
+                        <td className="px-5 py-3 text-muted-foreground max-w-[240px] truncate">
                           {row.page_url}
                         </td>
-                        <td className="px-5 py-3 text-right text-gray-900 font-medium">
+                        <td className="px-5 py-3 text-right text-foreground font-medium">
                           {row.position > 0 ? row.position : "-"}
                         </td>
-                        <td className="px-5 py-3 text-right text-gray-700">
+                        <td className="px-5 py-3 text-right text-foreground">
                           {row.clicks.toLocaleString()}
                         </td>
-                        <td className="px-5 py-3 text-right text-gray-700">
+                        <td className="px-5 py-3 text-right text-foreground">
                           {row.impressions.toLocaleString()}
                         </td>
-                        <td className="px-5 py-3 text-right text-gray-700">
+                        <td className="px-5 py-3 text-right text-foreground">
                           {(row.ctr * 100).toFixed(2)}%
                         </td>
                       </tr>
@@ -367,15 +349,15 @@ export default function KeywordOverviewPage() {
                   </tbody>
                 </table>
 
-                <div className="flex items-center justify-between px-5 py-4 border-t border-gray-100">
-                  <p className="text-sm text-gray-500">
+                <div className="flex items-center justify-between px-5 py-4 border-t border-border">
+                  <p className="text-sm text-muted-foreground">
                     {filtered.length.toLocaleString()} mots-clés · Page {currentPage} / {totalPages}
                   </p>
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                       disabled={currentPage === 1}
-                      className="px-3 py-1.5 text-sm rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+                      className="px-3 py-1.5 text-sm rounded-md border border-border text-muted-foreground hover:bg-muted disabled:opacity-40"
                     >
                       Précédent
                     </button>
@@ -384,13 +366,15 @@ export default function KeywordOverviewPage() {
                       const showEllipsis = prev !== undefined && page - prev > 1;
                       return (
                         <span key={page} className="flex items-center">
-                          {showEllipsis && <span className="px-2 text-gray-400 text-sm">…</span>}
+                          {showEllipsis && (
+                            <span className="px-2 text-muted-foreground text-sm">…</span>
+                          )}
                           <button
                             onClick={() => setCurrentPage(page)}
                             className={`min-w-[36px] px-2 py-1.5 text-sm rounded-md border transition ${
                               currentPage === page
-                                ? "bg-gray-900 text-white border-gray-900"
-                                : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                                ? "bg-primary text-primary-foreground border-primary"
+                                : "border-border text-muted-foreground hover:bg-muted"
                             }`}
                           >
                             {page}
@@ -401,7 +385,7 @@ export default function KeywordOverviewPage() {
                     <button
                       onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                       disabled={currentPage === totalPages}
-                      className="px-3 py-1.5 text-sm rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+                      className="px-3 py-1.5 text-sm rounded-md border border-border text-muted-foreground hover:bg-muted disabled:opacity-40"
                     >
                       Suivant
                     </button>

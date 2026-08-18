@@ -4,6 +4,9 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 type NavItem = { name: string; href: string };
 type NavGroup = { label: string; items: NavItem[] };
@@ -132,14 +135,13 @@ export default function DashboardLayout({
     setActiveToolkit(getActiveToolkit(pathname));
   }, [pathname]);
 
-  // Charge le statut d'abonnement une seule fois au montage du layout
   useEffect(() => {
     const fetchSubscription = async () => {
       try {
         const data: SubscriptionInfo = await apiFetch("/billing/subscription");
         setSubscription(data);
       } catch {
-        // Silencieux : si l'appel échoue, on n'affiche simplement pas le bouton d'essai
+        // Silencieux
       }
     };
     fetchSubscription();
@@ -161,15 +163,14 @@ export default function DashboardLayout({
 
   const current = toolkits.find((t) => t.id === activeToolkit) || toolkits[0];
 
-  // Le bouton n'apparaît que si l'utilisateur est encore Free et n'a jamais utilisé son essai
   const showTrialButton =
     subscription && subscription.plan === "free" && !subscription.has_used_trial;
 
   return (
-    <div className="h-screen flex overflow-hidden bg-[#f4f5f7]">
-            {/* Icon rail — fixe */}
-      <aside className="w-14 h-screen bg-[#111827] flex flex-col items-center py-3 gap-1 shrink-0 z-30">
-        <div className="mb-4 w-8 h-8 rounded-lg bg-orange-500 flex items-center justify-center text-white text-xs font-bold">
+    <div className="h-screen flex overflow-hidden bg-background">
+      {/* Icon rail — fixe, surface sombre dédiée indépendante du thème */}
+      <aside className="w-14 h-screen bg-rail flex flex-col items-center py-3 gap-1 shrink-0 z-30">
+        <div className="mb-4 w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground text-xs font-bold">
           AI
         </div>
 
@@ -186,8 +187,8 @@ export default function DashboardLayout({
                 }}
                 className={`w-10 h-10 rounded-lg flex items-center justify-center text-[10px] font-semibold transition ${
                   isActive
-                    ? "bg-white/15 text-white"
-                    : "text-gray-400 hover:bg-white/10 hover:text-white"
+                    ? "bg-white/15 text-rail-foreground-active"
+                    : "text-rail-foreground hover:bg-white/10 hover:text-rail-foreground-active"
                 }`}
                 title={tk.name}
               >
@@ -196,16 +197,18 @@ export default function DashboardLayout({
 
               {/* Card au survol */}
               <div className="pointer-events-none absolute left-full top-0 ml-3 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
-                <div className="pointer-events-auto w-56 bg-white rounded-xl shadow-xl border border-gray-200 py-3">
-                  <div className="px-4 pb-2 mb-1 border-b border-gray-100">
-                    <p className="text-sm font-semibold text-gray-900">{tk.name}</p>
+                <div className="pointer-events-auto w-56 bg-popover rounded-xl shadow-xl ring-1 ring-foreground/10 py-3">
+                  <div className="px-4 pb-2 mb-1 border-b border-border">
+                    <p className="text-sm font-semibold text-popover-foreground">
+                      {tk.name}
+                    </p>
                   </div>
 
                   <div className="max-h-72 overflow-y-auto">
                     {tk.groups.map((group, gIdx) => (
                       <div key={gIdx} className="px-2 py-1">
                         {group.label && (
-                          <p className="px-2 pt-2 pb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                          <p className="px-2 pt-2 pb-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                             {group.label}
                           </p>
                         )}
@@ -219,8 +222,8 @@ export default function DashboardLayout({
                             }}
                             className={`w-full text-left px-2 py-1.5 rounded-md text-sm transition ${
                               pathname === item.href
-                                ? "bg-gray-100 text-gray-900 font-medium"
-                                : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                                ? "bg-accent text-accent-foreground font-medium"
+                                : "text-foreground/80 hover:bg-muted hover:text-foreground"
                             }`}
                           >
                             {item.name}
@@ -242,26 +245,26 @@ export default function DashboardLayout({
             localStorage.removeItem("token");
             router.push("/auth/login");
           }}
-          className="w-10 h-10 rounded-lg text-gray-400 hover:bg-white/10 hover:text-white text-[10px]"
+          className="w-10 h-10 rounded-lg text-rail-foreground hover:bg-white/10 hover:text-rail-foreground-active text-[10px]"
           title="Log out"
         >
           OUT
         </button>
       </aside>
 
-      {/* Sidebar secondaire — fixe, contenu interne scrollable si long */}
+      {/* Sidebar secondaire */}
       <aside
-        className={`h-screen bg-white border-r border-gray-200 flex flex-col shrink-0 transition-all duration-300 ease-in-out overflow-hidden ${
+        className={`h-screen bg-card border-r border-border flex flex-col shrink-0 transition-all duration-300 ease-in-out overflow-hidden ${
           sidebarOpen ? "w-[240px] opacity-100" : "w-0 opacity-0 border-r-0"
         }`}
       >
-        <div className="h-14 flex items-center justify-between px-4 border-b border-gray-100 min-w-[240px] shrink-0">
-          <span className="font-bold text-gray-900 text-lg tracking-tight">
+        <div className="h-14 flex items-center justify-between px-4 border-b border-border min-w-[240px] shrink-0">
+          <span className="font-heading font-bold text-foreground text-lg tracking-tight">
             {current.name}
           </span>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="w-8 h-8 rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-700 flex items-center justify-center transition"
+            className="w-8 h-8 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center transition"
             title="Hide navigation"
           >
             «
@@ -272,7 +275,7 @@ export default function DashboardLayout({
           {current.groups.map((group, idx) => (
             <div key={idx} className="mb-1">
               {group.label && (
-                <p className="px-6 mt-4 mb-1 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+                <p className="px-6 mt-4 mb-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                   {group.label}
                 </p>
               )}
@@ -285,8 +288,8 @@ export default function DashboardLayout({
                       href={item.href}
                       className={`flex items-center px-3 py-2 rounded-md text-sm transition ${
                         isActive
-                          ? "bg-gray-100 text-gray-900 font-medium"
-                          : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                          ? "bg-accent text-accent-foreground font-medium"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
                       }`}
                     >
                       {item.name}
@@ -301,55 +304,59 @@ export default function DashboardLayout({
 
       {/* Zone principale */}
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-        {/* Header fixe */}
-        <header className="h-14 bg-white border-b border-gray-200 flex items-center px-4 md:px-6 justify-between gap-4 shrink-0">
-          <div className="flex items-center gap-2 min-w-0">
-            {!sidebarOpen && (
-              <button
-                onClick={() => setSidebarOpen(true)}
-                className="w-8 h-8 rounded-md border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-800 flex items-center justify-center transition shrink-0"
-                title="Show navigation"
-              >
-                »
-              </button>
-            )}
-            <div className="text-sm text-gray-500 truncate">
-              Home <span className="mx-1">›</span>{" "}
-              <span className="text-gray-900">{current.name}</span>
-            </div>
-          </div>
+       <header className="h-14 bg-card border-b border-border flex items-center px-4 md:px-6 justify-between gap-4 shrink-0">
+  <div className="flex items-center gap-2 min-w-0">
+    {!sidebarOpen && (
+      <button
+        onClick={() => setSidebarOpen(true)}
+        className="w-8 h-8 rounded-md border border-border text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center transition shrink-0"
+        title="Show navigation"
+      >
+        »
+      </button>
+    )}
+    <div className="text-sm text-muted-foreground truncate">
+      Home <span className="mx-1">›</span>{" "}
+      <span className="text-foreground">{current.name}</span>
+    </div>
+  </div>
 
-          <div className="flex items-center gap-3 shrink-0">
-            {trialError && (
-              <span className="hidden md:inline text-xs text-red-600">{trialError}</span>
-            )}
+  <div className="flex items-center gap-3 shrink-0">
+    {trialError && (
+      <span className="hidden md:inline text-xs text-destructive">
+        {trialError}
+      </span>
+    )}
 
-            {showTrialButton && (
-              <button
-                onClick={handleStartTrial}
-                disabled={trialLoading}
-                className="hidden sm:inline-flex text-sm font-medium bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded-md transition disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {trialLoading ? "Redirecting..." : "Start free trial"}
-              </button>
-            )}
+    {showTrialButton && (
+      <Button
+        onClick={handleStartTrial}
+        disabled={trialLoading}
+        className="hidden sm:inline-flex bg-success text-success-foreground hover:bg-success/90"
+        size="sm"
+      >
+        {trialLoading ? "Redirecting..." : "Start free trial"}
+      </Button>
+    )}
 
-            {subscription?.plan === "pro" && (
-              <span className="hidden sm:inline-flex items-center text-xs font-semibold bg-green-50 text-green-700 px-3 py-1.5 rounded-md">
-                {subscription.status === "trialing" ? "Trial active" : "Pro plan"}
-              </span>
-            )}
+    {subscription?.plan === "pro" && (
+      <Badge
+        variant="secondary"
+        className="hidden sm:inline-flex bg-success/10 text-success hover:bg-success/10"
+      >
+        {subscription.status === "trialing" ? "Trial active" : "Pro plan"}
+      </Badge>
+    )}
 
-            <button
-              onClick={() => router.push("/dashboard/sites")}
-              className="text-sm bg-gray-900 text-white px-4 py-1.5 rounded-md hover:bg-gray-800 transition"
-            >
-              + Add Site
-            </button>
-          </div>
-        </header>
+    {/* Light / Dark mode */}
+    <ThemeToggle />
 
-        {/* SEUL le contenu de la page scroll */}
+    <Button onClick={() => router.push("/dashboard/sites")} size="sm">
+      + Add Site
+    </Button>
+  </div>
+</header>
+
         <main className="flex-1 overflow-y-auto p-6">{children}</main>
       </div>
     </div>

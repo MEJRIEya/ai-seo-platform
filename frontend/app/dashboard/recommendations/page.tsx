@@ -30,25 +30,23 @@ type StatusFilter = "open" | "done" | "dismissed" | "all";
 
 const SEVERITY_CONFIG: Record<
   Severity,
-  { label: string; badge: string; dot: string; rail: string }
+  { label: string; badge: string; rail: string }
 > = {
   critical: {
     label: "Critique",
-    badge: "bg-red-50 text-red-700 ring-1 ring-inset ring-red-200",
-    dot: "bg-red-500",
-    rail: "bg-red-500",
+    badge:
+      "bg-destructive/10 text-destructive ring-1 ring-inset ring-destructive/20",
+    rail: "bg-destructive",
   },
   important: {
     label: "Important",
-    badge: "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200",
-    dot: "bg-amber-500",
-    rail: "bg-amber-500",
+    badge: "bg-warning/10 text-warning ring-1 ring-inset ring-warning/20",
+    rail: "bg-warning",
   },
   opportunity: {
     label: "Opportunité",
-    badge: "bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-200",
-    dot: "bg-blue-500",
-    rail: "bg-blue-500",
+    badge: "bg-info/10 text-info ring-1 ring-inset ring-info/20",
+    rail: "bg-info",
   },
 };
 
@@ -85,7 +83,6 @@ export default function RecommendationsPage() {
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("open");
 
-  // --- Sites ---
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) {
@@ -108,7 +105,6 @@ export default function RecommendationsPage() {
     fetchSites();
   }, [router]);
 
-  // --- Recommendations ---
   const fetchRecs = async (siteId: string) => {
     try {
       const data: Recommendation[] = await apiFetch(
@@ -136,8 +132,6 @@ export default function RecommendationsPage() {
       await apiFetch(`/api/sites/${selectedSiteId}/recommendations/generate`, {
         method: "POST",
       });
-      // L'analyse tourne en arrière-plan (worker Celery) — on laisse un peu
-      // de marge puis on rafraîchit une fois.
       setTimeout(() => {
         fetchRecs(selectedSiteId).finally(() => setGenerating(false));
       }, 4000);
@@ -149,7 +143,6 @@ export default function RecommendationsPage() {
 
   const handleStatusChange = async (rec: Recommendation, newStatus: Status) => {
     setUpdatingId(rec.id);
-    // mise à jour optimiste
     setRecs((prev) =>
       prev.map((r) => (r.id === rec.id ? { ...r, status: newStatus } : r))
     );
@@ -160,7 +153,6 @@ export default function RecommendationsPage() {
       );
     } catch (err: any) {
       setError(err.message);
-      // rollback si ça échoue
       setRecs((prev) =>
         prev.map((r) => (r.id === rec.id ? { ...r, status: rec.status } : r))
       );
@@ -169,7 +161,6 @@ export default function RecommendationsPage() {
     }
   };
 
-  // --- Derived data ---
   const counts = useMemo(() => {
     const base = { critical: 0, important: 0, opportunity: 0, open: 0, done: 0 };
     for (const r of recs) {
@@ -187,23 +178,24 @@ export default function RecommendationsPage() {
       .sort((a, b) => {
         const sev = SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity];
         if (sev !== 0) return sev;
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        return (
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
       });
   }, [recs, severityFilter, statusFilter]);
 
   if (loading) {
-    return <div className="text-gray-500">Loading...</div>;
+    return <div className="text-muted-foreground">Loading...</div>;
   }
 
   const selectedSite = sites.find((s) => s.id === selectedSiteId);
 
   return (
     <div className="space-y-6">
-      {/* Header + site selector */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Recommendations</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <h1 className="text-xl font-semibold text-foreground">Recommendations</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
             Diagnostics et actions générés par l&rsquo;IA à partir de vos données
             GA4 et Search Console.
           </p>
@@ -213,7 +205,7 @@ export default function RecommendationsPage() {
           <select
             value={selectedSiteId}
             onChange={(e) => setSelectedSiteId(e.target.value)}
-            className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white text-gray-900 min-w-[220px]"
+            className="border border-input rounded-md px-3 py-2 text-sm bg-background text-foreground min-w-[220px]"
           >
             {sites.length === 0 && <option value="">No sites</option>}
             {sites.map((site) => (
@@ -226,10 +218,10 @@ export default function RecommendationsPage() {
           <button
             onClick={handleGenerate}
             disabled={!selectedSiteId || generating}
-            className="text-sm bg-gray-900 text-white px-4 py-2 rounded-md hover:bg-gray-800 transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+            className="text-sm bg-primary text-primary-foreground px-4 py-2 rounded-md hover:bg-primary/90 transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {generating && (
-              <span className="h-3.5 w-3.5 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+              <span className="h-3.5 w-3.5 rounded-full border-2 border-primary-foreground/40 border-t-primary-foreground animate-spin" />
             )}
             {generating ? "Analyse en cours..." : "Lancer une analyse"}
           </button>
@@ -237,45 +229,50 @@ export default function RecommendationsPage() {
       </div>
 
       {error && (
-        <div className="bg-red-50 text-red-600 text-sm p-3 rounded-md">{error}</div>
+        <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md">
+          {error}
+        </div>
       )}
 
       {sites.length === 0 ? (
-        <div className="bg-white rounded-lg border border-gray-200 p-10 text-center text-gray-400">
+        <div className="bg-card rounded-lg border border-border p-10 text-center text-muted-foreground">
           No sites yet. Add one from the Sites page.
         </div>
       ) : (
         <>
-          {/* Summary cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-white rounded-lg border border-gray-200 p-5">
+            <div className="bg-card rounded-lg border border-border p-5">
               <div className="flex items-center gap-2 mb-1">
-                <span className="h-2 w-2 rounded-full bg-red-500" />
-                <p className="text-sm text-gray-500">Critique</p>
+                <span className="h-2 w-2 rounded-full bg-destructive" />
+                <p className="text-sm text-muted-foreground">Critique</p>
               </div>
-              <p className="text-2xl font-semibold text-gray-900">{counts.critical}</p>
+              <p className="text-2xl font-semibold text-foreground">
+                {counts.critical}
+              </p>
             </div>
-            <div className="bg-white rounded-lg border border-gray-200 p-5">
+            <div className="bg-card rounded-lg border border-border p-5">
               <div className="flex items-center gap-2 mb-1">
-                <span className="h-2 w-2 rounded-full bg-amber-500" />
-                <p className="text-sm text-gray-500">Important</p>
+                <span className="h-2 w-2 rounded-full bg-warning" />
+                <p className="text-sm text-muted-foreground">Important</p>
               </div>
-              <p className="text-2xl font-semibold text-gray-900">{counts.important}</p>
+              <p className="text-2xl font-semibold text-foreground">
+                {counts.important}
+              </p>
             </div>
-            <div className="bg-white rounded-lg border border-gray-200 p-5">
+            <div className="bg-card rounded-lg border border-border p-5">
               <div className="flex items-center gap-2 mb-1">
-                <span className="h-2 w-2 rounded-full bg-blue-500" />
-                <p className="text-sm text-gray-500">Opportunité</p>
+                <span className="h-2 w-2 rounded-full bg-info" />
+                <p className="text-sm text-muted-foreground">Opportunité</p>
               </div>
-              <p className="text-2xl font-semibold text-gray-900">
+              <p className="text-2xl font-semibold text-foreground">
                 {counts.opportunity}
               </p>
             </div>
-            <div className="bg-white rounded-lg border border-gray-200 p-5">
-              <p className="text-sm text-gray-500 mb-1">Résolues</p>
-              <p className="text-2xl font-semibold text-gray-900">
+            <div className="bg-card rounded-lg border border-border p-5">
+              <p className="text-sm text-muted-foreground mb-1">Résolues</p>
+              <p className="text-2xl font-semibold text-foreground">
                 {counts.done}
-                <span className="text-sm font-normal text-gray-400">
+                <span className="text-sm font-normal text-muted-foreground">
                   {" "}
                   / {recs.length}
                 </span>
@@ -283,9 +280,8 @@ export default function RecommendationsPage() {
             </div>
           </div>
 
-          {/* Filters */}
           <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-md p-1">
+            <div className="flex items-center gap-1 bg-card border border-border rounded-md p-1">
               {(
                 [
                   ["all", "Toutes"],
@@ -299,8 +295,8 @@ export default function RecommendationsPage() {
                   onClick={() => setSeverityFilter(value)}
                   className={`px-3 py-1.5 text-xs font-medium rounded transition ${
                     severityFilter === value
-                      ? "bg-gray-900 text-white"
-                      : "text-gray-600 hover:bg-gray-50"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-muted"
                   }`}
                 >
                   {label}
@@ -311,7 +307,7 @@ export default function RecommendationsPage() {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-              className="border border-gray-300 rounded-md px-3 py-1.5 text-xs bg-white text-gray-700"
+              className="border border-input rounded-md px-3 py-1.5 text-xs bg-background text-foreground"
             >
               <option value="open">À traiter</option>
               <option value="done">Résolues</option>
@@ -320,20 +316,19 @@ export default function RecommendationsPage() {
             </select>
           </div>
 
-          {/* List */}
           {recsLoading ? (
-            <div className="text-gray-500">Loading recommendations...</div>
+            <div className="text-muted-foreground">Loading recommendations...</div>
           ) : filtered.length === 0 ? (
-            <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
-              <p className="text-gray-500 text-sm mb-1">
+            <div className="bg-card rounded-lg border border-border p-12 text-center">
+              <p className="text-muted-foreground text-sm mb-1">
                 {recs.length === 0
                   ? "Aucune recommandation pour ce site pour l'instant."
                   : "Aucune recommandation ne correspond à ces filtres."}
               </p>
               {recs.length === 0 && (
-                <p className="text-gray-400 text-xs">
-                  Cliquez sur &laquo; Lancer une analyse &raquo; pour générer un
-                  diagnostic à partir des données{" "}
+                <p className="text-muted-foreground text-xs">
+                  Cliquez sur « Lancer une analyse » pour générer un diagnostic
+                  à partir des données{" "}
                   {selectedSite ? `de ${selectedSite.domain}` : "du site"}.
                 </p>
               )}
@@ -348,7 +343,7 @@ export default function RecommendationsPage() {
                 return (
                   <div
                     key={rec.id}
-                    className={`relative bg-white rounded-lg border border-gray-200 pl-5 pr-5 py-4 flex items-start gap-4 transition ${
+                    className={`relative bg-card rounded-lg border border-border pl-5 pr-5 py-4 flex items-start gap-4 transition ${
                       isResolved ? "opacity-60" : ""
                     }`}
                   >
@@ -364,35 +359,35 @@ export default function RecommendationsPage() {
                           {cfg.label}
                         </span>
                         {rec.status === "done" && (
-                          <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-green-50 text-green-700 ring-1 ring-inset ring-green-200">
+                          <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-success/10 text-success ring-1 ring-inset ring-success/20">
                             Résolue
                           </span>
                         )}
                         {rec.status === "dismissed" && (
-                          <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                          <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
                             Ignorée
                           </span>
                         )}
-                        <span className="text-xs text-gray-400">
+                        <span className="text-xs text-muted-foreground">
                           {timeAgo(rec.created_at)}
                         </span>
                       </div>
 
                       <h3
-                        className={`text-sm font-semibold text-gray-900 mb-1 ${
+                        className={`text-sm font-semibold text-foreground mb-1 ${
                           isResolved ? "line-through" : ""
                         }`}
                       >
                         {rec.title}
                       </h3>
 
-                      <p className="text-sm text-gray-600 leading-relaxed mb-2">
+                      <p className="text-sm text-muted-foreground leading-relaxed mb-2">
                         {rec.reasoning}
                       </p>
 
                       {rec.estimated_impact && (
-                        <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                          <span className="font-medium text-gray-700">
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <span className="font-medium text-foreground">
                             Impact estimé :
                           </span>
                           {rec.estimated_impact}
@@ -406,14 +401,14 @@ export default function RecommendationsPage() {
                           <button
                             onClick={() => handleStatusChange(rec, "done")}
                             disabled={isUpdating}
-                            className="text-xs font-medium px-3 py-1.5 rounded-md bg-gray-900 text-white hover:bg-gray-800 transition disabled:opacity-40 whitespace-nowrap"
+                            className="text-xs font-medium px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition disabled:opacity-40 whitespace-nowrap"
                           >
                             Marquer fait
                           </button>
                           <button
                             onClick={() => handleStatusChange(rec, "dismissed")}
                             disabled={isUpdating}
-                            className="text-xs font-medium px-3 py-1.5 rounded-md text-gray-500 hover:bg-gray-50 transition disabled:opacity-40 whitespace-nowrap"
+                            className="text-xs font-medium px-3 py-1.5 rounded-md text-muted-foreground hover:bg-muted transition disabled:opacity-40 whitespace-nowrap"
                           >
                             Ignorer
                           </button>
@@ -422,7 +417,7 @@ export default function RecommendationsPage() {
                         <button
                           onClick={() => handleStatusChange(rec, "open")}
                           disabled={isUpdating}
-                          className="text-xs font-medium px-3 py-1.5 rounded-md text-gray-500 hover:bg-gray-50 transition disabled:opacity-40 whitespace-nowrap"
+                          className="text-xs font-medium px-3 py-1.5 rounded-md text-muted-foreground hover:bg-muted transition disabled:opacity-40 whitespace-nowrap"
                         >
                           Rouvrir
                         </button>

@@ -203,7 +203,7 @@ export default function PositionTrackingPage() {
   }, [totalPages, currentPage]);
 
   if (loading) {
-    return <div className="text-gray-500">Loading...</div>;
+    return <div className="text-muted-foreground">Loading...</div>;
   }
 
   const selectedSite = sites.find((s) => s.id === selectedSiteId);
@@ -212,8 +212,8 @@ export default function PositionTrackingPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Position Tracking</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <h1 className="text-xl font-semibold text-foreground">Position Tracking</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
             Suivi des positions dans le temps · Top 3 / 10 / 20 / 100 · Tendances
           </p>
         </div>
@@ -221,7 +221,7 @@ export default function PositionTrackingPage() {
         <select
           value={selectedSiteId}
           onChange={(e) => setSelectedSiteId(e.target.value)}
-          className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white text-gray-900 min-w-[220px]"
+          className="border border-input rounded-md px-3 py-2 text-sm bg-background text-foreground min-w-[220px]"
         >
           {sites.length === 0 && <option value="">No sites</option>}
           {sites.map((site) => (
@@ -233,36 +233,30 @@ export default function PositionTrackingPage() {
       </div>
 
       {error && (
-        <div className="bg-red-50 text-red-600 text-sm p-3 rounded-md">{error}</div>
+        <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md">
+          {error}
+        </div>
       )}
 
       {sites.length === 0 ? (
-        <div className="bg-white rounded-lg border border-gray-200 p-10 text-center text-gray-400">
+        <div className="bg-card rounded-lg border border-border p-10 text-center text-muted-foreground">
           No sites yet. Add one from the Sites page.
         </div>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <div className="bg-white rounded-lg border border-gray-200 p-5">
-              <p className="text-sm text-gray-500 mb-1">Keywords</p>
-              <p className="text-2xl font-semibold text-gray-900">{stats.total}</p>
-            </div>
-            <div className="bg-white rounded-lg border border-gray-200 p-5">
-              <p className="text-sm text-gray-500 mb-1">Top 3</p>
-              <p className="text-2xl font-semibold text-gray-900">{stats.top3}</p>
-            </div>
-            <div className="bg-white rounded-lg border border-gray-200 p-5">
-              <p className="text-sm text-gray-500 mb-1">Top 10</p>
-              <p className="text-2xl font-semibold text-gray-900">{stats.top10}</p>
-            </div>
-            <div className="bg-white rounded-lg border border-gray-200 p-5">
-              <p className="text-sm text-gray-500 mb-1">Top 20</p>
-              <p className="text-2xl font-semibold text-gray-900">{stats.top20}</p>
-            </div>
-            <div className="bg-white rounded-lg border border-gray-200 p-5">
-              <p className="text-sm text-gray-500 mb-1">Top 100</p>
-              <p className="text-2xl font-semibold text-gray-900">{stats.top100}</p>
-            </div>
+            {[
+              { label: "Keywords", value: stats.total },
+              { label: "Top 3", value: stats.top3 },
+              { label: "Top 10", value: stats.top10 },
+              { label: "Top 20", value: stats.top20 },
+              { label: "Top 100", value: stats.top100 },
+            ].map((kpi) => (
+              <div key={kpi.label} className="bg-card rounded-lg border border-border p-5">
+                <p className="text-sm text-muted-foreground mb-1">{kpi.label}</p>
+                <p className="text-2xl font-semibold text-foreground">{kpi.value}</p>
+              </div>
+            ))}
           </div>
 
           <div className="flex items-center gap-3 flex-wrap">
@@ -271,14 +265,14 @@ export default function PositionTrackingPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Rechercher un mot-clé ou une page..."
-              className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white min-w-[260px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="border border-input rounded-md px-3 py-2 text-sm bg-background text-foreground min-w-[260px] focus:outline-none focus:ring-2 focus:ring-ring"
             />
             <select
               value={sortBy}
               onChange={(e) =>
                 setSortBy(e.target.value as "position" | "clicks" | "impressions")
               }
-              className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white text-gray-700"
+              className="border border-input rounded-md px-3 py-2 text-sm bg-background text-foreground"
             >
               <option value="position">Trier par position</option>
               <option value="clicks">Trier par clics</option>
@@ -286,11 +280,11 @@ export default function PositionTrackingPage() {
             </select>
           </div>
 
-          <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
+          <div className="bg-card rounded-lg border border-border overflow-x-auto">
             {metricsLoading ? (
-              <div className="p-8 text-gray-500 text-sm">Loading keywords...</div>
+              <div className="p-8 text-muted-foreground text-sm">Loading keywords...</div>
             ) : filtered.length === 0 ? (
-              <div className="p-10 text-center text-gray-400 text-sm">
+              <div className="p-10 text-center text-muted-foreground text-sm">
                 {keywordRows.length === 0
                   ? `Aucune donnée pour ${selectedSite?.domain || "ce site"}. Importez d'abord les données GSC.`
                   : "Aucun résultat pour cette recherche."}
@@ -299,7 +293,7 @@ export default function PositionTrackingPage() {
               <>
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-xs text-gray-400 font-medium border-b border-gray-100">
+                    <tr className="text-xs text-muted-foreground font-medium border-b border-border">
                       <th className="text-left px-5 py-3">Keyword</th>
                       <th className="text-left px-5 py-3">Page</th>
                       <th className="text-right px-5 py-3">Position</th>
@@ -311,37 +305,37 @@ export default function PositionTrackingPage() {
                   </thead>
                   <tbody>
                     {paginatedRows.map((row) => (
-                      <tr key={row.keyword} className="border-b border-gray-50 hover:bg-gray-50">
-                        <td className="px-5 py-3 text-blue-600 font-medium max-w-[200px] truncate">
+                      <tr key={row.keyword} className="border-b border-border hover:bg-muted">
+                        <td className="px-5 py-3 text-primary font-medium max-w-[200px] truncate">
                           {row.keyword}
                         </td>
-                        <td className="px-5 py-3 text-gray-500 max-w-[240px] truncate">
+                        <td className="px-5 py-3 text-muted-foreground max-w-[240px] truncate">
                           {row.page_url}
                         </td>
-                        <td className="px-5 py-3 text-right text-gray-900 font-medium">
+                        <td className="px-5 py-3 text-right text-foreground font-medium">
                           {row.position > 0 ? row.position : "-"}
                         </td>
-                        <td className="px-5 py-3 text-right text-gray-700">
+                        <td className="px-5 py-3 text-right text-foreground">
                           {row.clicks.toLocaleString()}
                         </td>
-                        <td className="px-5 py-3 text-right text-gray-700">
+                        <td className="px-5 py-3 text-right text-foreground">
                           {row.impressions.toLocaleString()}
                         </td>
-                        <td className="px-5 py-3 text-right text-gray-700">
+                        <td className="px-5 py-3 text-right text-foreground">
                           {(row.ctr * 100).toFixed(2)}%
                         </td>
                         <td className="px-5 py-3 text-center">
                           {row.trend === "up" && (
-                            <span className="text-green-600 text-xs font-medium">↑ Up</span>
+                            <span className="text-success text-xs font-medium">↑ Up</span>
                           )}
                           {row.trend === "down" && (
-                            <span className="text-red-500 text-xs font-medium">↓ Down</span>
+                            <span className="text-destructive text-xs font-medium">↓ Down</span>
                           )}
                           {row.trend === "stable" && (
-                            <span className="text-gray-400 text-xs">→ Stable</span>
+                            <span className="text-muted-foreground text-xs">→ Stable</span>
                           )}
                           {row.trend === "new" && (
-                            <span className="text-blue-500 text-xs font-medium">New</span>
+                            <span className="text-info text-xs font-medium">New</span>
                           )}
                         </td>
                       </tr>
@@ -349,15 +343,16 @@ export default function PositionTrackingPage() {
                   </tbody>
                 </table>
 
-                <div className="flex items-center justify-between px-5 py-4 border-t border-gray-100">
-                  <p className="text-sm text-gray-500">
-                    {filtered.length.toLocaleString()} mots-clés · Page {currentPage} / {totalPages}
+                <div className="flex items-center justify-between px-5 py-4 border-t border-border">
+                  <p className="text-sm text-muted-foreground">
+                    {filtered.length.toLocaleString()} mots-clés · Page {currentPage} /{" "}
+                    {totalPages}
                   </p>
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                       disabled={currentPage === 1}
-                      className="px-3 py-1.5 text-sm rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+                      className="px-3 py-1.5 text-sm rounded-md border border-border text-muted-foreground hover:bg-muted disabled:opacity-40"
                     >
                       Précédent
                     </button>
@@ -366,13 +361,15 @@ export default function PositionTrackingPage() {
                       const showEllipsis = prev !== undefined && page - prev > 1;
                       return (
                         <span key={page} className="flex items-center">
-                          {showEllipsis && <span className="px-2 text-gray-400 text-sm">…</span>}
+                          {showEllipsis && (
+                            <span className="px-2 text-muted-foreground text-sm">…</span>
+                          )}
                           <button
                             onClick={() => setCurrentPage(page)}
                             className={`min-w-[36px] px-2 py-1.5 text-sm rounded-md border transition ${
                               currentPage === page
-                                ? "bg-gray-900 text-white border-gray-900"
-                                : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                                ? "bg-primary text-primary-foreground border-primary"
+                                : "border-border text-muted-foreground hover:bg-muted"
                             }`}
                           >
                             {page}
@@ -383,7 +380,7 @@ export default function PositionTrackingPage() {
                     <button
                       onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                       disabled={currentPage === totalPages}
-                      className="px-3 py-1.5 text-sm rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+                      className="px-3 py-1.5 text-sm rounded-md border border-border text-muted-foreground hover:bg-muted disabled:opacity-40"
                     >
                       Suivant
                     </button>
