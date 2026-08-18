@@ -1,0 +1,85 @@
+# AI SEO Platform
+
+> Plateforme d'analyse SEO en quasi temps réel : Google Search Console, Google Analytics 4, Core Web Vitals et recommandations IA.
+
+Site: https://ton-domaine.com
+Docs API: https://api.ton-domaine.com/docs
+Contact: mejrieya384@gmail.com
+
+## Product
+
+AI SEO Platform aide les équipes marketing et les agences à :
+- Suivre les positions et le trafic organique (GSC)
+- Croiser les sessions / users / pageviews (GA4)
+- Auditer les Core Web Vitals (LCP, INP, CLS, FCP)
+- Détecter des quick wins (positions 4–20, CTR bas)
+- Générer des recommandations IA actionnables
+- Produire des rapports GSC / GA4 / Monthly SEO (PDF)
+
+## Main features
+
+- Auth : email/password + Google OAuth
+- Sites : connexion GSC + GA4 par propriété
+- Dashboard SEO (KPI, trends, insights)
+- Position Tracking & Keyword Overview
+- Quick Wins / Opportunities
+- Site Audit (Core Web Vitals)
+- AI Recommendations
+- Reports builder (GSC, GA4, Monthly SEO)
+- Billing / free trial
+
+## Data sources
+
+- Google Search Console API (clicks, impressions, position, CTR, keywords, pages)
+- Google Analytics 4 Data API (sessions, users, pageviews)
+- Chrome UX / lab metrics for Core Web Vitals
+- Optional LLM (xAI Grok) for SEO recommendations and content tools
+
+## Tech stack
+
+- Frontend: Next.js (App Router), TypeScript, Tailwind CSS, Recharts
+- Backend: FastAPI (Python), SQLAlchemy async, PostgreSQL, Redis, Celery
+- Auth: JWT + Google OAuth
+- Architecture: modular monolith
+
+## Public pages
+
+- / — Marketing home
+- /auth/login — Login
+- /auth/register — Sign up
+- /dashboard — SEO dashboard (authenticated)
+- /dashboard/performance — Site overview
+- /dashboard/positions — Position tracking
+- /dashboard/keywords — Keyword overview
+- /dashboard/opportunities — Quick wins
+- /dashboard/site-audit — Core Web Vitals
+- /dashboard/recommendations — AI recommendations
+- /dashboard/reports — Report templates
+- /dashboard/sites — Manage sites
+- /dashboard/billing — Plans & trial
+- /dashboard/settings — Account & Google connections
+
+## API (authenticated, Bearer JWT)
+
+Base: https://api.ton-domaine.com
+
+- GET  /health
+- POST /auth/register
+- POST /auth/login
+- GET  /auth/me
+- GET  /sites/
+- POST /sites/
+- GET  /google/accounts
+- GET  /google/connect
+- GET  /analytics/sites/{site_id}/report
+- GET  /analytics/sites/{site_id}/gsc
+- GET  /analytics/sites/{site_id}/report/cwv
+- POST /analytics/import/gsc/{site_id}
+- GET  /api/sites/{site_id}/recommendations
+
+Full OpenAPI: /docs
+
+## Optional
+
+- llms-full.txt : detailed product + API description
+- robots.txt : standard crawl rules

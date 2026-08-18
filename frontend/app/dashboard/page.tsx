@@ -157,6 +157,47 @@ function SeverityLegendRow({
   );
 }
 
+function OverviewStat({
+  label,
+  value,
+  sub,
+  delta,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  delta?: number | null;
+}) {
+  const positive = delta != null && delta > 0;
+  const negative = delta != null && delta < 0;
+
+  return (
+    <div className="space-y-1">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-2xl font-heading font-semibold text-foreground tabular-nums">
+        {value}
+      </p>
+      <div className="flex items-center gap-2 text-xs">
+        {sub && <span className="text-muted-foreground">{sub}</span>}
+        {delta != null && (
+          <span
+            className={
+              positive
+                ? "text-success font-medium"
+                : negative
+                  ? "text-destructive font-medium"
+                  : "text-muted-foreground"
+            }
+          >
+            {positive ? "+" : ""}
+            {delta.toFixed(1)}%
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function buildQuickWins(gscData: GscMetric[]): QuickWin[] {
   const map = new Map<
     string,
@@ -287,7 +328,8 @@ export default function DashboardPage() {
     return {
       critical: openOnly.filter((r) => r.severity === "critical").length,
       important: openOnly.filter((r) => r.severity === "important").length,
-      opportunity: openOnly.filter((r) => r.severity === "opportunity").length,
+      opportunity: openOnly.filter((r) => r.severity === "opportunity")
+        .length,
     };
   }, [recommendations]);
 
@@ -329,6 +371,16 @@ export default function DashboardPage() {
       ].filter((d) => d.value > 0)
     : [];
 
+  const keywordCount = report?.top_keywords_gsc?.length ?? 0;
+
+  const cwvScore = useMemo(() => {
+    if (!cwv || cwv.summary.total_pages_analysees === 0) return null;
+    const t = cwv.summary.total_pages_analysees;
+    const good = cwv.summary.nb_pages_bonnes;
+    const mid = cwv.summary.nb_pages_a_ameliorer;
+    return Math.round((good * 100 + mid * 50) / t);
+  }, [cwv]);
+
   if (loading) {
     return <div className="text-muted-foreground">Loading...</div>;
   }
@@ -341,6 +393,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-xl font-heading font-semibold text-foreground">
           SEO Dashboard
@@ -394,7 +447,7 @@ export default function DashboardPage() {
         <div className="text-muted-foreground">Loading report...</div>
       ) : (
         <>
-          {/* KPI */}
+          {/* KPI row */}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
             <KpiCard
               label="Organic Clicks"
@@ -415,12 +468,187 @@ export default function DashboardPage() {
             />
             <KpiCard
               label="Sessions (GA4)"
-              value={report?.ga4_summary.total_sessions.toLocaleString() ?? "-"}
+              value={
+                report?.ga4_summary.total_sessions.toLocaleString() ?? "-"
+              }
               colorVar="--chart-2"
             />
           </div>
 
-          {/* Trend */}
+          {/* Domain overview — style Semrush */}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            {/* SEO panel */}
+            <Card className="overflow-hidden">
+              <CardHeader className="pb-3 border-b border-border">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span className="inline-flex items-center rounded-full bg-primary/15 text-primary px-2.5 py-0.5 text-xs font-semibold">
+                    SEO
+                  </span>
+                  <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
+                    <span>Scope: Site</span>
+                    <span>·</span>
+                    <span>{selectedSite?.domain ?? "—"}</span>
+                    <span>·</span>
+                    <span>
+                      {new Date().toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                    </span>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-5">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+                  <OverviewStat
+                    label="Tech Score (CWV)"
+                    value={cwvScore != null ? String(cwvScore) : "—"}
+                    sub={
+                      cwv
+                        ? `${cwv.summary.total_pages_analysees} pages`
+                        : "No audit"
+                    }
+                  />
+                  <OverviewStat
+                    label="Organic Clicks"
+                    value={
+                      report?.gsc_summary.total_clicks.toLocaleString() ?? "—"
+                    }
+                    sub="GSC"
+                  />
+                  <OverviewStat
+                    label="Organic Keywords"
+                    value={keywordCount.toLocaleString()}
+                    sub="Tracked in GSC"
+                  />
+                  <OverviewStat
+                    label="Impressions"
+                    value={
+                      report?.gsc_summary.total_impressions.toLocaleString() ??
+                      "—"
+                    }
+                  />
+                  <OverviewStat
+                    label="Avg. Position"
+                    value={
+                      report?.gsc_summary.avg_position?.toFixed(1) ?? "—"
+                    }
+                  />
+                  <OverviewStat
+                    label="Sessions"
+                    value={
+                      report?.ga4_summary.total_sessions.toLocaleString() ??
+                      "—"
+                    }
+                    sub="GA4"
+                  />
+                </div>
+
+                {report && report.daily_trend.length > 1 && (
+                  <div className="mt-6 h-16">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={report.daily_trend}>
+                        <defs>
+                          <linearGradient
+                            id="sparkClicks"
+                            x1="0"
+                            y1="0"
+                            x2="0"
+                            y2="1"
+                          >
+                            <stop
+                              offset="0%"
+                              stopColor="var(--chart-1)"
+                              stopOpacity={0.35}
+                            />
+                            <stop
+                              offset="100%"
+                              stopColor="var(--chart-1)"
+                              stopOpacity={0}
+                            />
+                          </linearGradient>
+                        </defs>
+                        <Area
+                          type="monotone"
+                          dataKey="clicks"
+                          stroke="var(--chart-1)"
+                          strokeWidth={1.5}
+                          fill="url(#sparkClicks)"
+                          dot={false}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Insights panel */}
+            <Card className="overflow-hidden">
+              <CardHeader className="pb-3 border-b border-border">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="inline-flex items-center rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-400 px-2.5 py-0.5 text-xs font-semibold">
+                    Insights
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 text-xs"
+                    onClick={() => router.push("/dashboard/recommendations")}
+                  >
+                    Open AI recs
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-5">
+                <div className="grid grid-cols-3 gap-4 mb-6">
+                  <OverviewStat
+                    label="Open recs"
+                    value={String(totalOpenRecs)}
+                    sub="AI"
+                  />
+                  <OverviewStat
+                    label="Critical"
+                    value={String(severityCounts.critical)}
+                  />
+                  <OverviewStat
+                    label="Opportunities"
+                    value={String(severityCounts.opportunity)}
+                  />
+                </div>
+
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5">
+                    <span className="text-muted-foreground">
+                      Quick wins (pos 4–20)
+                    </span>
+                    <span className="font-semibold text-foreground tabular-nums">
+                      {quickWins.length}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5">
+                    <span className="text-muted-foreground">
+                      CWV weak pages
+                    </span>
+                    <span className="font-semibold text-foreground tabular-nums">
+                      {cwv?.summary.nb_pages_faibles ?? 0}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5">
+                    <span className="text-muted-foreground">Avg CTR</span>
+                    <span className="font-semibold text-foreground tabular-nums">
+                      {report?.gsc_summary.avg_ctr != null
+                        ? `${(report.gsc_summary.avg_ctr * 100).toFixed(1)}%`
+                        : "—"}
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Trend chart */}
           <Card>
             <CardHeader>
               <CardTitle className="text-base font-medium">
@@ -436,7 +664,13 @@ export default function DashboardPage() {
                 <ResponsiveContainer width="100%" height={280}>
                   <AreaChart data={report.daily_trend}>
                     <defs>
-                      <linearGradient id="fillClicks" x1="0" y1="0" x2="0" y2="1">
+                      <linearGradient
+                        id="fillClicks"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
                         <stop
                           offset="5%"
                           stopColor="var(--chart-1)"
@@ -467,10 +701,16 @@ export default function DashboardPage() {
                         />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="var(--border)"
+                    />
                     <XAxis
                       dataKey="date"
-                      tick={{ fontSize: 12, fill: "var(--muted-foreground)" }}
+                      tick={{
+                        fontSize: 12,
+                        fill: "var(--muted-foreground)",
+                      }}
                       tickFormatter={(value) =>
                         new Date(value).toLocaleDateString("fr-FR", {
                           day: "2-digit",
@@ -480,12 +720,18 @@ export default function DashboardPage() {
                     />
                     <YAxis
                       yAxisId="left"
-                      tick={{ fontSize: 12, fill: "var(--muted-foreground)" }}
+                      tick={{
+                        fontSize: 12,
+                        fill: "var(--muted-foreground)",
+                      }}
                     />
                     <YAxis
                       yAxisId="right"
                       orientation="right"
-                      tick={{ fontSize: 12, fill: "var(--muted-foreground)" }}
+                      tick={{
+                        fontSize: 12,
+                        fill: "var(--muted-foreground)",
+                      }}
                     />
                     <Tooltip
                       contentStyle={{
@@ -524,7 +770,7 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          {/* AI + CWV */}
+          {/* AI + CWV pies */}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
@@ -659,7 +905,9 @@ export default function DashboardPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
-                <CardTitle className="text-base font-medium">Quick Wins</CardTitle>
+                <CardTitle className="text-base font-medium">
+                  Quick Wins
+                </CardTitle>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Position 4–20 · Impressions élevées · Potentiel de clics
                 </p>
@@ -694,14 +942,18 @@ export default function DashboardPage() {
                         <TableCell className="text-primary font-medium max-w-[220px] truncate">
                           {w.keyword}
                         </TableCell>
-                        <TableCell className="text-right">{w.position}</TableCell>
+                        <TableCell className="text-right">
+                          {w.position}
+                        </TableCell>
                         <TableCell className="text-right">
                           {w.impressions.toLocaleString()}
                         </TableCell>
                         <TableCell className="text-right">
                           {(w.ctr * 100).toFixed(1)}%
                         </TableCell>
-                        <TableCell className="text-right">{w.clicks}</TableCell>
+                        <TableCell className="text-right">
+                          {w.clicks}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -741,7 +993,9 @@ export default function DashboardPage() {
                           <TableCell className="text-right">
                             {kw.position?.toFixed(1) ?? "-"}
                           </TableCell>
-                          <TableCell className="text-right">{kw.clicks}</TableCell>
+                          <TableCell className="text-right">
+                            {kw.clicks}
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -752,7 +1006,9 @@ export default function DashboardPage() {
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-base font-medium">Your Sites</CardTitle>
+                <CardTitle className="text-base font-medium">
+                  Your Sites
+                </CardTitle>
                 <Button
                   size="sm"
                   onClick={() => router.push("/dashboard/sites")}

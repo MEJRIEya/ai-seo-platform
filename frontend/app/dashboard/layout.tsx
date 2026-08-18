@@ -30,6 +30,7 @@ const toolkits: Toolkit[] = [
         items: [
           { name: "Site Overview", href: "/dashboard/performance" },
           { name: "Position Tracking", href: "/dashboard/positions" },
+          { name: "Domain Overview", href: "/dashboard/domain-overview" },
           { name: "Site Audit", href: "/dashboard/site-audit" },
         ],
       },
@@ -37,7 +38,6 @@ const toolkits: Toolkit[] = [
         label: "Keyword Research",
         items: [
           { name: "Keyword Overview", href: "/dashboard/keywords" },
-          { name: "Top Pages", href: "/dashboard/top-pages" },
         ],
       },
       {
@@ -81,33 +81,10 @@ const toolkits: Toolkit[] = [
       },
     ],
   },
-  {
-    id: "content",
-    name: "Content",
-    groups: [
-      {
-        label: "",
-        items: [{ name: "Dashboard", href: "/dashboard/content" }],
-      },
-      {
-        label: "AI Tools",
-        items: [
-          { name: "AI Article Generator", href: "/dashboard/content/ai-article" },
-          { name: "Content Optimizer", href: "/dashboard/content/optimizer" },
-          { name: "Topic Finder", href: "/dashboard/content/topics" },
-        ],
-      },
-      {
-        label: "Library",
-        items: [{ name: "My Content", href: "/dashboard/content/library" }],
-      },
-    ],
-  },
 ];
 
 function getActiveToolkit(pathname: string): string {
   if (pathname.startsWith("/dashboard/reports")) return "reports";
-  if (pathname.startsWith("/dashboard/content")) return "content";
   return "seo";
 }
 
