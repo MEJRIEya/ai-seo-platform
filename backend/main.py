@@ -33,6 +33,8 @@ from app.routers import auth_google
 from app.routers.auth_google import router as auth_google_router  
 from app.routers.reports import router as reports_router
 from app.routers import billing
+from app.routers.admin import router as admin_router
+
 
 
 
@@ -54,6 +56,7 @@ app.add_middleware(
 )
 
 app.include_router(reports_router)
+app.include_router(admin_router)
 
 app.include_router(auth_router)
 app.include_router(google_router)

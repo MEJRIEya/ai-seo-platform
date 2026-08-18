@@ -18,4 +18,5 @@ class User(Base):
     google_sub: Mapped[str] = mapped_column(String, nullable=True, unique=True)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
