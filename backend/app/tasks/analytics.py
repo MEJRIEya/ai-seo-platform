@@ -35,7 +35,14 @@ def _refresh_site_gsc(db, site):
             service.import_gsc_data(site.gsc_property_url or f"sc-domain:{site.domain}")
         )
 
-        # Supprime les 30 derniers jours existants avant de réinsérer (évite les doublons)
+        # --- AJOUT : persiste le token rafraîchi si google-auth en a généré un nouveau ---
+        refreshed = service.get_refreshed_token_data()
+        if refreshed:
+            google_account.access_token = refreshed["access_token"]
+            google_account.token_expires_at = refreshed["token_expires_at"]
+            db.add(google_account)
+        # --- fin ajout ---
+
         cutoff = datetime.utcnow() - timedelta(days=30)
         db.query(GscMetric).filter(
             GscMetric.site_id == site.id, GscMetric.time >= cutoff
@@ -62,7 +69,6 @@ def _refresh_site_gsc(db, site):
         db.rollback()
         print(f"[refresh] Erreur GSC pour {site.domain}: {e}")
 
-
 def _refresh_site_ga4(db, site):
     if not site.ga4_property_id:
         return
@@ -76,6 +82,14 @@ def _refresh_site_ga4(db, site):
     service = GoogleService(google_account)
     try:
         rows = asyncio.run(service.import_ga4_data(site.ga4_property_id))
+
+        # --- AJOUT : persiste le token rafraîchi ---
+        refreshed = service.get_refreshed_token_data()
+        if refreshed:
+            google_account.access_token = refreshed["access_token"]
+            google_account.token_expires_at = refreshed["token_expires_at"]
+            db.add(google_account)
+        # --- fin ajout ---
 
         cutoff = datetime.utcnow() - timedelta(days=30)
         db.query(Ga4Metric).filter(

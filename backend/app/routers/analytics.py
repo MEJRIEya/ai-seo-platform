@@ -55,6 +55,14 @@ async def import_gsc_data(
     service = GoogleService(google_account)
     rows = await service.import_gsc_data(site.gsc_property_url or f"sc-domain:{site.domain}")
 
+    # --- Persiste le token rafraîchi si google-auth en a généré un nouveau ---
+    refreshed = service.get_refreshed_token_data()
+    if refreshed:
+        google_account.access_token = refreshed["access_token"]
+        google_account.token_expires_at = refreshed["token_expires_at"]
+        db.add(google_account)
+    # --- fin ajout ---
+
     inserted_count = 0
     for row in rows:
         keys = row.get("keys", [])
@@ -112,6 +120,14 @@ async def import_ga4_data(
 
     service = GoogleService(google_account)
     rows = await service.import_ga4_data(site.ga4_property_id)
+
+    # --- Persiste le token rafraîchi si google-auth en a généré un nouveau ---
+    refreshed = service.get_refreshed_token_data()
+    if refreshed:
+        google_account.access_token = refreshed["access_token"]
+        google_account.token_expires_at = refreshed["token_expires_at"]
+        db.add(google_account)
+    # --- fin ajout ---
 
     inserted_count = 0
     for row in rows:
