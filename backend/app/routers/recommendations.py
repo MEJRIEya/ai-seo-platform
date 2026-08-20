@@ -14,13 +14,13 @@ router = APIRouter(prefix="/api", tags=["recommendations"])
 
 
 async def _get_owned_site(site_id: uuid.UUID, current_user: User, db: AsyncSession) -> Site:
-    """Vérifie que le site appartient bien à l'utilisateur connecté."""
+    """Vérifie que le site existe et appartient bien à l'utilisateur connecté."""
     result = await db.execute(
         select(Site).where(Site.id == site_id, Site.user_id == current_user.id)
     )
     site = result.scalar_one_or_none()
-    if not site:
-        raise HTTPException(status_code=404, detail="Site non trouvé ou non autorisé")
+    if site is None:
+        raise HTTPException(status_code=404, detail="Site introuvable")
     return site
 
 
@@ -46,14 +46,15 @@ async def update_status(
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(Recommendation)
-        .join(Site, Site.id == Recommendation.site_id)
-        .where(Recommendation.id == rec_id, Site.user_id == current_user.id)
+        select(Recommendation).filter(Recommendation.id == rec_id)
     )
-    rec = result.scalar_one_or_none()
+    rec = result.scalars().first()
 
     if not rec:
-        raise HTTPException(status_code=404, detail="Recommandation introuvable ou non autorisée")
+        raise HTTPException(status_code=404, detail="Recommandation introuvable")
+
+    # Vérifie que le site de cette recommandation appartient bien à l'utilisateur
+    await _get_owned_site(rec.site_id, current_user, db)
 
     rec.status = new_status
     await db.commit()
