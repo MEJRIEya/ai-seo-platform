@@ -20,9 +20,9 @@ class Settings(BaseSettings):
     DATABASE_URL_SYNC: str = os.getenv("DATABASE_URL_SYNC", "postgresql+psycopg2://postgres:password@localhost:5432/aiseo")
 
     # xAI
-    XAI_API_KEY: str
+    XAI_API_KEY: str 
     XAI_BASE_URL: str = "https://api.x.ai/v1"
-    XAI_MODEL: str = "grok-4.3"  # vérifie le modèle dispo sur ton compte
+    XAI_MODEL: str = "grok-2-latest"
 
     # Redis
     REDIS_URL: str

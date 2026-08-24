@@ -1,14 +1,13 @@
 import uuid
 from sqlalchemy import delete
+import logging
 
 from app.core.celery_app import celery_app
 from app.core.database import SessionLocal
-from app.services.grok_service import (
-    analyser_donnees_seo_mock as analyser_donnees_seo,
-    parser_reponse_grok,
-)
+
 from app.services.data_aggregation import agreger_donnees_site
 from app.models.recommendation import Recommendation, Severity
+from app.services.grok_service import analyser_donnees_seo_safe, parser_reponse_grok
 
 
 @celery_app.task
@@ -20,6 +19,7 @@ def generer_recommandations_task(site_id: str, force: bool = False):
     db = SessionLocal()
     try:
         site_uuid = uuid.UUID(site_id)
+        logger = logging.getLogger(__name__)
 
         # Idempotence : au cas où le router n'aurait pas déjà tout effacé
         if force:
@@ -28,8 +28,12 @@ def generer_recommandations_task(site_id: str, force: bool = False):
             )
             db.commit()
 
+                # ...
         donnees_resumees = agreger_donnees_site(site_uuid, db)
-        reponse_brute = analyser_donnees_seo(donnees_resumees)
+
+        reponse_brute, source = analyser_donnees_seo_safe(donnees_resumees)
+        logger.info("Recommandations site=%s source=%s", site_id, source)
+
         rapport = parser_reponse_grok(reponse_brute)
 
         for diag in rapport.diagnostics:
