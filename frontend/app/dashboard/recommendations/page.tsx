@@ -79,6 +79,7 @@ export default function RecommendationsPage() {
   const [generating, setGenerating] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
 
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("open");
@@ -121,19 +122,52 @@ export default function RecommendationsPage() {
     if (!selectedSiteId) return;
     setRecsLoading(true);
     setError("");
+    setInfo("");
     fetchRecs(selectedSiteId).finally(() => setRecsLoading(false));
   }, [selectedSiteId]);
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (force = false) => {
     if (!selectedSiteId) return;
+
+    if (force) {
+      const ok = window.confirm(
+        "Cela supprimera toutes les recommandations existantes (y compris celles marquées faites ou ignorées) et en générera de nouvelles. Continuer ?"
+      );
+      if (!ok) return;
+    }
+
     setGenerating(true);
     setError("");
+    setInfo("");
+
     try {
-      await apiFetch(`/api/sites/${selectedSiteId}/recommendations/generate`, {
-        method: "POST",
-      });
+      const qs = force ? "?force=true" : "";
+      const res = await apiFetch(
+        `/api/sites/${selectedSiteId}/recommendations/generate${qs}`,
+        { method: "POST" }
+      );
+
+      // Cache hit : pas d'appel Grok
+      if (res?.status === "already_exists") {
+        setInfo(
+          res.message ||
+            "Des recommandations existent déjà. Utilisez « Régénérer » pour forcer une nouvelle analyse."
+        );
+        setGenerating(false);
+        return;
+      }
+
+      setInfo(
+        force
+          ? "Régénération lancée… actualisation dans quelques secondes."
+          : "Analyse lancée… actualisation dans quelques secondes."
+      );
+
       setTimeout(() => {
-        fetchRecs(selectedSiteId).finally(() => setGenerating(false));
+        fetchRecs(selectedSiteId).finally(() => {
+          setGenerating(false);
+          setInfo("");
+        });
       }, 4000);
     } catch (err: any) {
       setError(err.message);
@@ -162,7 +196,13 @@ export default function RecommendationsPage() {
   };
 
   const counts = useMemo(() => {
-    const base = { critical: 0, important: 0, opportunity: 0, open: 0, done: 0 };
+    const base = {
+      critical: 0,
+      important: 0,
+      opportunity: 0,
+      open: 0,
+      done: 0,
+    };
     for (const r of recs) {
       base[r.severity] += 1;
       if (r.status === "open") base.open += 1;
@@ -194,14 +234,16 @@ export default function RecommendationsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-foreground">Recommendations</h1>
+          <h1 className="text-xl font-semibold text-foreground">
+            Recommendations
+          </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Diagnostics et actions générés par l&rsquo;IA à partir de vos données
-            GA4 et Search Console.
+            Diagnostics et actions générés par l&rsquo;IA à partir de vos
+            données GA4 et Search Console.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <select
             value={selectedSiteId}
             onChange={(e) => setSelectedSiteId(e.target.value)}
@@ -215,22 +257,53 @@ export default function RecommendationsPage() {
             ))}
           </select>
 
-          <button
-            onClick={handleGenerate}
-            disabled={!selectedSiteId || generating}
-            className="text-sm bg-primary text-primary-foreground px-4 py-2 rounded-md hover:bg-primary/90 transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            {generating && (
-              <span className="h-3.5 w-3.5 rounded-full border-2 border-primary-foreground/40 border-t-primary-foreground animate-spin" />
-            )}
-            {generating ? "Analyse en cours..." : "Lancer une analyse"}
-          </button>
+          {recs.length === 0 ? (
+            <button
+              onClick={() => handleGenerate(false)}
+              disabled={!selectedSiteId || generating}
+              className="text-sm bg-primary text-primary-foreground px-4 py-2 rounded-md hover:bg-primary/90 transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {generating && (
+                <span className="h-3.5 w-3.5 rounded-full border-2 border-primary-foreground/40 border-t-primary-foreground animate-spin" />
+              )}
+              {generating ? "Analyse en cours..." : "Lancer une analyse"}
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusFilter("open");
+                  setSeverityFilter("all");
+                }}
+                className="text-sm border border-border bg-card text-foreground px-4 py-2 rounded-md hover:bg-muted transition"
+              >
+                Voir les recommandations ({recs.length})
+              </button>
+              <button
+                onClick={() => handleGenerate(true)}
+                disabled={!selectedSiteId || generating}
+                className="text-sm bg-primary text-primary-foreground px-4 py-2 rounded-md hover:bg-primary/90 transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {generating && (
+                  <span className="h-3.5 w-3.5 rounded-full border-2 border-primary-foreground/40 border-t-primary-foreground animate-spin" />
+                )}
+                {generating ? "Régénération..." : "Régénérer"}
+              </button>
+            </>
+          )}
         </div>
       </div>
 
       {error && (
         <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md">
           {error}
+        </div>
+      )}
+
+      {info && !error && (
+        <div className="bg-primary/10 text-primary text-sm p-3 rounded-md">
+          {info}
         </div>
       )}
 
@@ -317,7 +390,9 @@ export default function RecommendationsPage() {
           </div>
 
           {recsLoading ? (
-            <div className="text-muted-foreground">Loading recommendations...</div>
+            <div className="text-muted-foreground">
+              Loading recommendations...
+            </div>
           ) : filtered.length === 0 ? (
             <div className="bg-card rounded-lg border border-border p-12 text-center">
               <p className="text-muted-foreground text-sm mb-1">
