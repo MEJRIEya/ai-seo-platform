@@ -9,6 +9,8 @@ from app.models.user import User
 from app.models.site import Site
 from app.models.recommendation import Recommendation, Status
 from app.tasks.recommendations import generer_recommandations_task
+from app.models.subscription import Subscription
+from app.core.plans import PLANS
 
 router = APIRouter(prefix="/api", tags=["recommendations"])
 
@@ -62,6 +64,7 @@ async def update_status(
     return rec
 
 
+
 @router.post("/sites/{site_id}/recommendations/generate")
 async def trigger_recommendations(
     site_id: uuid.UUID,
@@ -69,6 +72,20 @@ async def trigger_recommendations(
     db: AsyncSession = Depends(get_db),
 ):
     await _get_owned_site(site_id, current_user, db)
+
+    # Vérifie que le plan de l'utilisateur autorise les recommandations IA
+    sub_result = await db.execute(
+        select(Subscription).where(Subscription.user_id == current_user.id)
+    )
+    sub = sub_result.scalar_one_or_none()
+    plan_key = sub.plan if sub else "free"
+    plan_config = PLANS.get(plan_key, PLANS["free"])
+
+    if not plan_config["ai_recommendations"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Les recommandations IA ne sont pas disponibles avec votre plan actuel. Passez au plan Pro pour y accéder."
+        )
 
     generer_recommandations_task.delay(str(site_id))
     return {"status": "tâche lancée", "site_id": str(site_id)}
