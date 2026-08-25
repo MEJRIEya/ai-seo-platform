@@ -6,15 +6,16 @@ from app.core.config import settings
 Base = declarative_base()
 
 # 1. Traitement de l'URL Async
-database_url = settings.DATABASE_URL
-if database_url and database_url.startswith("postgres://"):
+database_url = settings.DATABASE_URL or ""
+if database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql+asyncpg://", 1)
-elif database_url and database_url.startswith("postgresql://"):
+elif database_url.startswith("postgresql://"):
     database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
-# 2. Ajout de l'argument SSL pour asyncpg (nécessaire sur Render)
+# 2. Gestion SSL assouplie (évite ConnectionRefusedError sur le réseau interne Render)
 connect_args = {}
-if "onrender.com" in database_url or "render" in database_url:
+if "render.com" in database_url and "dpg-" not in database_url:
+    # SSL uniquement si on passe par le domaine externe *.render.com
     connect_args = {"ssl": "require"}
 
 engine = create_async_engine(
@@ -30,8 +31,8 @@ async def get_db():
         yield session
 
 # 3. Traitement de l'URL Sync (ex: pour Alembic)
-database_url_sync = settings.DATABASE_URL_SYNC
-if database_url_sync and database_url_sync.startswith("postgres://"):
+database_url_sync = settings.DATABASE_URL_SYNC or ""
+if database_url_sync.startswith("postgres://"):
     database_url_sync = database_url_sync.replace("postgres://", "postgresql://", 1)
 
 engine_sync = create_engine(database_url_sync, echo=settings.DEBUG)
