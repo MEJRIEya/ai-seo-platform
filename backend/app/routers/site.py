@@ -11,8 +11,36 @@ from app.models.google_account import GoogleAccount
 from app.schemas.site import SiteCreate, SiteRead
 from app.core.plans import PLANS
 from app.models.subscription import Subscription
+from fastapi import BackgroundTasks
+from app.tasks.analytics import refresh_single_site
+from app.tasks.core_web_vitals import generer_core_web_vitals_task
+from app.tasks.recommendations import generer_recommandations_task
 
 router = APIRouter(prefix="/sites", tags=["Sites"])
+
+
+
+
+
+@router.post("/{site_id}/sync", status_code=202)
+async def sync_site(
+    site_id: UUID,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Site).where(Site.id == site_id, Site.user_id == current_user.id)
+    )
+    site = result.scalar_one_or_none()
+    if site is None:
+        raise HTTPException(status_code=404, detail="Site introuvable")
+
+    background_tasks.add_task(refresh_single_site, str(site_id))
+    background_tasks.add_task(generer_core_web_vitals_task, str(site_id))
+    background_tasks.add_task(generer_recommandations_task, str(site_id))
+
+    return {"status": "sync lancé"}
 
 
 

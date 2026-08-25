@@ -9,9 +9,18 @@ from app.models.ga4_metric import Ga4Metric
 from app.services.google_service import GoogleService
 
 
-@celery_app.task
+import asyncio
+from datetime import datetime, timedelta
+from app.core.database import SessionLocal
+from app.models.site import Site
+from app.models.google_account import GoogleAccount
+from app.models.gsc_metric import GscMetric
+from app.models.ga4_metric import Ga4Metric
+from app.services.google_service import GoogleService
+
+
 def refresh_all_sites_data():
-    """Tâche périodique : réimporte GSC + GA4 pour tous les sites."""
+    """Réimporte GSC + GA4 pour tous les sites."""
     db = SessionLocal()
     try:
         sites = db.query(Site).all()
@@ -21,6 +30,17 @@ def refresh_all_sites_data():
     finally:
         db.close()
 
+
+def refresh_single_site(site_id):
+    """Réimporte GSC + GA4 pour un seul site."""
+    db = SessionLocal()
+    try:
+        site = db.query(Site).filter(Site.id == site_id).first()
+        if site:
+            _refresh_site_gsc(db, site)
+            _refresh_site_ga4(db, site)
+    finally:
+        db.close()
 
 def _refresh_site_gsc(db, site):
     google_account = db.query(GoogleAccount).filter(

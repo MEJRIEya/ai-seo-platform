@@ -27,7 +27,7 @@ def _construire_url_complete(domain: str, page_url: str) -> str:
     return urljoin(base, page_url.lstrip("/"))
 
 
-@celery_app.task
+
 def generer_core_web_vitals_task(site_id: str, nb_pages: int = 10, days: int = 30):
     """
     Récupère les Core Web Vitals (via CrUX) pour les `nb_pages` pages les plus

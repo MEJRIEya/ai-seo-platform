@@ -10,7 +10,7 @@ from app.models.recommendation import Recommendation, Severity
 from app.services.grok_service import analyser_donnees_seo_safe, parser_reponse_grok
 
 
-@celery_app.task
+
 def generer_recommandations_task(site_id: str, force: bool = False):
     """
     Génère des recommandations SEO pour un site.
