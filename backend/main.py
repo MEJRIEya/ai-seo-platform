@@ -36,11 +36,6 @@ from app.routers import billing
 from app.routers.admin import router as admin_router
 
 
-
-
-
-
-
 app = FastAPI(
     title="AI SEO Platform",
     description="Plateforme d'analyse SEO avec IA en quasi temps réel",
@@ -52,7 +47,8 @@ app = FastAPI(
 origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "https://ai-seo-platform-zn35.onrender.com/",  # Votre domaine frontend Render
+    "https://ai-seo-platform-zn35.onrender.com",   # Sans slash final (CRUCIAL)
+    "https://ai-seo-platform-zn35.onrender.com/",  # Avec slash au cas où
 ]
 
 app.add_middleware(
@@ -62,6 +58,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 app.include_router(reports_router)
 app.include_router(admin_router)
 
@@ -74,8 +71,6 @@ app.include_router(recommendations.router)
 app.include_router(core_web_vitals_router)  
 app.include_router(auth_google.router)
 app.include_router(billing.router)
-
-
 
 
 @app.get("/")
