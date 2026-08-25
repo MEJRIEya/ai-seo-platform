@@ -41,15 +41,12 @@ async def google_login_callback(code: str, state: str, db: AsyncSession = Depend
     user = result.scalar_one_or_none()
 
     if user is None:
-        # Vérifie si un compte existe déjà avec cet email (inscrit via mdp classique)
         result = await db.execute(select(User).where(User.email == identity["email"]))
         user = result.scalar_one_or_none()
 
         if user is not None:
-            # Compte existant : on lie simplement le google_sub
             user.google_sub = identity["google_sub"]
         else:
-            # Nouveau compte, créé directement via Google
             user = User(
                 email=identity["email"],
                 full_name=identity["full_name"],
@@ -63,5 +60,4 @@ async def google_login_callback(code: str, state: str, db: AsyncSession = Depend
 
     access_token = create_access_token(data={"sub": user.email})
 
-    # Redirige vers le frontend avec le token (à ajuster selon comment Next.js le récupère)
-return RedirectResponse(f"{settings.FRONTEND_URL}/auth/callback?token={access_token}")
+    return RedirectResponse(f"{settings.FRONTEND_URL}/auth/callback?token={access_token}")
