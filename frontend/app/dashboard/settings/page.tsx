@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
@@ -41,7 +41,7 @@ const STATUS_LABELS: Record<string, string> = {
   canceled: "Annulé",
 };
 
-export default function SettingsPage() {
+function SettingsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
@@ -98,7 +98,6 @@ export default function SettingsPage() {
     load();
   }, [router]);
 
-  // Gère le retour depuis Stripe Checkout (?billing=success | ?billing=cancelled)
   useEffect(() => {
     const billingParam = searchParams.get("billing");
     if (billingParam === "success") {
@@ -119,7 +118,7 @@ export default function SettingsPage() {
         body: JSON.stringify({ full_name: fullName }),
       });
       setUser(updated);
-      setSuccess("Profil mis a jour");
+      setSuccess("Profil mis à jour");
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -137,7 +136,7 @@ export default function SettingsPage() {
       return;
     }
     if (newPassword.length < 6) {
-      setError("Le mot de passe doit contenir au moins 6 caracteres");
+      setError("Le mot de passe doit contenir au moins 6 caractères");
       return;
     }
 
@@ -150,7 +149,7 @@ export default function SettingsPage() {
           new_password: newPassword,
         }),
       });
-      setSuccess("Mot de passe modifie");
+      setSuccess("Mot de passe modifié");
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
@@ -167,7 +166,8 @@ export default function SettingsPage() {
       router.push("/auth/login");
       return;
     }
-    const url = "http://127.0.0.1:8000/google/connect?token=" + encodeURIComponent(token);
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+    const url = `${baseUrl}/google/connect?token=` + encodeURIComponent(token);
     window.location.href = url;
   };
 
@@ -199,7 +199,7 @@ export default function SettingsPage() {
       <div>
         <h1 className="text-xl font-semibold text-gray-900">Settings</h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          Profil, securite et connexions Google
+          Profil, sécurité et connexions Google
         </p>
       </div>
 
@@ -365,12 +365,12 @@ export default function SettingsPage() {
           </button>
         </div>
         <p className="text-xs text-gray-400 mb-4">
-          Connecte sous : <span className="text-gray-600 font-medium">{displayName}</span>
+          Connecté sous : <span className="text-gray-600 font-medium">{displayName}</span>
         </p>
 
         {accounts.length === 0 ? (
           <p className="text-sm text-gray-400">
-            Aucun compte Google connecte. Connectez-en un pour importer GSC / GA4.
+            Aucun compte Google connecté. Connectez-en un pour importer GSC / GA4.
           </p>
         ) : (
           <>
@@ -384,7 +384,7 @@ export default function SettingsPage() {
                     <p className="text-sm font-medium text-gray-900">
                       {acc.google_email || displayName}
                     </p>
-                    <p className="text-xs text-gray-400">Compte Google connecte</p>
+                    <p className="text-xs text-gray-400">Compte Google connecté</p>
                   </div>
                   <span className="text-xs text-green-700 bg-green-50 px-2 py-1 rounded-full">
                     Actif
@@ -404,7 +404,7 @@ export default function SettingsPage() {
                     disabled={page === 1}
                     className="text-xs px-3 py-1.5 border border-gray-300 rounded-md disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
                   >
-                    Precedent
+                    Précédent
                   </button>
                   <button
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
@@ -420,5 +420,13 @@ export default function SettingsPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={<div className="text-gray-500 p-6">Loading settings...</div>}>
+      <SettingsContent />
+    </Suspense>
   );
 }
