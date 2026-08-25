@@ -42,7 +42,8 @@ app = FastAPI(
     title="AI SEO Platform",
     description="Plateforme d'analyse SEO avec IA en quasi temps réel",
     version="0.1.0",
-    docs_url="/docs"
+    docs_url="/docs",
+    lifespan=lifespan,  # Activation du gestionnaire de cycle de vie
 )
 
 # CORS
@@ -92,3 +93,21 @@ async def startup():
     async with engine.begin() as conn:
         # Crée toutes les tables manquantes automatiquement
         await conn.run_sync(Base.metadata.create_all)
+
+
+from contextlib import asynccontextmanager
+from app.core.database import engine, Base
+
+# Importez vos modèles afin qu'SQLAlchemy les enregistre dans le registre de metadata
+from app.models.user import User  # noqa: F401
+from app.models.site import Site  # noqa: F401
+from app.models.seo_metric import SeoMetric  # noqa: F401
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Création automatique des tables manquantes en BDD
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
+
