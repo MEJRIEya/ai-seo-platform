@@ -404,8 +404,11 @@ export default function DashboardPage() {
 
         <div className="flex items-center gap-3">
           {sites.length > 0 && (
-            <Select value={selectedSiteId} onValueChange={setSelectedSiteId}>
-              <SelectTrigger className="min-w-[200px]">
+            <Select
+  value={selectedSiteId}
+  onValueChange={(v) => setSelectedSiteId(v ?? "")}
+>
+  <SelectTrigger className="min-w-[200px]">
                 <SelectValue placeholder="Sélectionner un site">
                   {() => sites.find((s) => s.id === selectedSiteId)?.domain}
                 </SelectValue>
@@ -742,7 +745,7 @@ export default function DashboardPage() {
                         fontSize: 13,
                       }}
                       labelFormatter={(value) =>
-                        new Date(value).toLocaleDateString("fr-FR")
+  new Date(String(value)).toLocaleDateString("fr-FR")
                       }
                     />
                     <Legend />

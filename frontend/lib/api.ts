@@ -1,15 +1,15 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
 export async function apiFetch(endpoint: string, options: RequestInit = {}) {
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("token") : null;
 
-  const headers: HeadersInit = {
-    "Content-Type": "application/json",
-    ...(options.headers || {}),
-  };
-
+  const headers = new Headers(options.headers || {});
+  if (!headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
   if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
+    headers.set("Authorization", `Bearer ${token}`);
   }
 
   const response = await fetch(`${API_URL}${endpoint}`, {
@@ -19,17 +19,21 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}) {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.detail || "Une erreur est survenue");
+    throw new Error(
+      (error as { detail?: string }).detail || "Une erreur est survenue"
+    );
   }
 
   return response.json();
 }
 
 export async function downloadFile(endpoint: string, filename: string) {
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-  const response = await fetch(`${API_URL}${endpoint}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const headers = new Headers();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  const response = await fetch(`${API_URL}${endpoint}`, { headers });
   if (!response.ok) {
     throw new Error("Impossible de générer le rapport");
   }

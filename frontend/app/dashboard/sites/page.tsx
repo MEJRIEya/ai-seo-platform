@@ -289,8 +289,10 @@ export default function SitesPage() {
             {googleAccounts.length > 0 && (
               <div className="space-y-1.5">
                 <Label>Compte Google</Label>
-                <Select value={googleAccountId} onValueChange={setGoogleAccountId}>
-                  <SelectTrigger>
+<Select
+  value={googleAccountId}
+  onValueChange={(v) => setGoogleAccountId(v ?? "")}
+>                  <SelectTrigger>
                     <SelectValue placeholder="Sélectionner un compte">
                       {() =>
                         googleAccounts.find((a) => a.id === googleAccountId)

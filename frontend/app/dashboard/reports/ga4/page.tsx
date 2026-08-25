@@ -262,17 +262,17 @@ export default function Ga4ReportPage() {
                     dataKey="date"
                     tick={{ fontSize: 11, fill: "#9ca3af" }}
                     tickFormatter={(value) =>
-                      new Date(value).toLocaleDateString("fr-FR", {
-                        day: "2-digit",
-                        month: "2-digit",
-                      })
-                    }
+  new Date(String(value)).toLocaleDateString("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+  })
+}
                   />
                   <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} />
                   <Tooltip
                     labelFormatter={(value) =>
-                      new Date(value).toLocaleDateString("fr-FR")
-                    }
+  new Date(String(value)).toLocaleDateString("fr-FR")
+}
                   />
                   <Area
                     type="monotone"

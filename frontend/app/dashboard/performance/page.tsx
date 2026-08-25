@@ -216,8 +216,8 @@ export default function PerformancePage() {
                       color: "var(--popover-foreground)",
                     }}
                     labelFormatter={(value) =>
-                      new Date(value).toLocaleDateString("fr-FR")
-                    }
+  new Date(String(value)).toLocaleDateString("fr-FR")
+}
                   />
                   <Legend />
                   <Line
