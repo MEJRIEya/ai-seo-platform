@@ -52,7 +52,7 @@ app = FastAPI(
 origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "https://ai-seo-platform-zn35.onrender.com",  # Assurez-vous d'inclure votre frontend Render
+    "https://ai-seo-platform-zn35.onrender.com/",  # Votre domaine frontend Render
 ]
 
 app.add_middleware(
