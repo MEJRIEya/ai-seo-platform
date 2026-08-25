@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import {
@@ -263,6 +263,11 @@ export default function DashboardPage() {
   const [reportLoading, setReportLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // --- État pour le bouton "Rafraîchir" ---
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState("");
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
+
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) {
@@ -287,41 +292,70 @@ export default function DashboardPage() {
     fetchSites();
   }, [router]);
 
-  useEffect(() => {
+  // fetchAll extrait en fonction réutilisable (useCallback pour pouvoir
+  // l'appeler à la fois au chargement du site ET après un rafraîchissement)
+  const fetchAll = useCallback(async () => {
     if (!selectedSiteId) return;
 
-    const fetchAll = async () => {
-      setReportLoading(true);
-      setError("");
-      try {
-        const [reportData, recsData, cwvData, gscData] = await Promise.all([
-          apiFetch(`/analytics/sites/${selectedSiteId}/report`),
-          apiFetch(`/api/sites/${selectedSiteId}/recommendations`).catch(
-            () => []
-          ),
-          apiFetch(`/analytics/sites/${selectedSiteId}/report/cwv`).catch(
-            () => null
-          ),
-          apiFetch(`/analytics/sites/${selectedSiteId}/gsc?limit=3000`).catch(
-            () => []
-          ),
-        ]);
+    setReportLoading(true);
+    setError("");
+    try {
+      const [reportData, recsData, cwvData, gscData] = await Promise.all([
+        apiFetch(`/analytics/sites/${selectedSiteId}/report`),
+        apiFetch(`/api/sites/${selectedSiteId}/recommendations`).catch(
+          () => []
+        ),
+        apiFetch(`/analytics/sites/${selectedSiteId}/report/cwv`).catch(
+          () => null
+        ),
+        apiFetch(`/analytics/sites/${selectedSiteId}/gsc?limit=3000`).catch(
+          () => []
+        ),
+      ]);
 
-        setReport(reportData);
-        setRecommendations(recsData ?? []);
-        setCwv(cwvData);
-        setQuickWins(buildQuickWins((gscData as GscMetric[]) ?? []));
-      } catch (err: any) {
-        setError(err.message);
-        setReport(null);
-        setQuickWins([]);
-      } finally {
-        setReportLoading(false);
-      }
-    };
-
-    fetchAll();
+      setReport(reportData);
+      setRecommendations(recsData ?? []);
+      setCwv(cwvData);
+      setQuickWins(buildQuickWins((gscData as GscMetric[]) ?? []));
+    } catch (err: any) {
+      setError(err.message);
+      setReport(null);
+      setQuickWins([]);
+    } finally {
+      setReportLoading(false);
+    }
   }, [selectedSiteId]);
+
+  useEffect(() => {
+    fetchAll();
+  }, [fetchAll]);
+
+  // --- Handler du bouton "Rafraîchir" ---
+  const handleRefresh = async () => {
+    if (!selectedSiteId || syncing) return;
+
+    setSyncing(true);
+    setSyncMessage("Synchronisation en cours...");
+    setError("");
+
+    try {
+      await apiFetch(`/sites/${selectedSiteId}/sync`, { method: "POST" });
+
+      // La tâche tourne en arrière-plan côté backend (BackgroundTasks),
+      // on laisse quelques secondes puis on recharge les données affichées.
+      setTimeout(async () => {
+        await fetchAll();
+        setLastSyncedAt(new Date());
+        setSyncMessage("Données mises à jour");
+        setSyncing(false);
+        setTimeout(() => setSyncMessage(""), 3000);
+      }, 5000);
+    } catch (err: any) {
+      setError(err.message || "Erreur lors de la synchronisation");
+      setSyncing(false);
+      setSyncMessage("");
+    }
+  };
 
   const severityCounts = useMemo(() => {
     const openOnly = recommendations.filter((r) => r.status === "open");
@@ -405,10 +439,10 @@ export default function DashboardPage() {
         <div className="flex items-center gap-3">
           {sites.length > 0 && (
             <Select
-  value={selectedSiteId}
-  onValueChange={(v) => setSelectedSiteId(v ?? "")}
->
-  <SelectTrigger className="min-w-[200px]">
+              value={selectedSiteId}
+              onValueChange={(v) => setSelectedSiteId(v ?? "")}
+            >
+              <SelectTrigger className="min-w-[200px]">
                 <SelectValue placeholder="Sélectionner un site">
                   {() => sites.find((s) => s.id === selectedSiteId)?.domain}
                 </SelectValue>
@@ -422,11 +456,43 @@ export default function DashboardPage() {
               </SelectContent>
             </Select>
           )}
+
+          {selectedSiteId && (
+            <Button
+              onClick={handleRefresh}
+              disabled={syncing}
+              variant="outline"
+              size="sm"
+              className="gap-2"
+            >
+              <span
+                className={syncing ? "inline-block animate-spin" : ""}
+                style={{ display: "inline-block" }}
+              >
+                🔄
+              </span>
+              {syncing ? "Synchronisation..." : "Rafraîchir"}
+            </Button>
+          )}
+
           <Button onClick={() => router.push("/dashboard/sites")}>
             + Add Site
           </Button>
         </div>
       </div>
+
+      {/* Message de statut de synchro */}
+      {syncMessage && (
+        <div className="text-xs text-muted-foreground -mt-3">
+          {syncMessage}
+          {lastSyncedAt && !syncing && (
+            <span>
+              {" "}
+              · Dernière synchro : {lastSyncedAt.toLocaleTimeString("fr-FR")}
+            </span>
+          )}
+        </div>
+      )}
 
       {error && (
         <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md">
@@ -745,7 +811,7 @@ export default function DashboardPage() {
                         fontSize: 13,
                       }}
                       labelFormatter={(value) =>
-  new Date(String(value)).toLocaleDateString("fr-FR")
+                        new Date(String(value)).toLocaleDateString("fr-FR")
                       }
                     />
                     <Legend />
