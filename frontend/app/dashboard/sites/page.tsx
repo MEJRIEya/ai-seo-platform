@@ -161,7 +161,14 @@ export default function SitesPage() {
   };
 
   const handleConnectGoogle = () => {
-    window.location.href = "http://127.0.0.1:8000/google/connect";
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setError("Vous devez être connecté pour lier un compte Google.");
+      return;
+    }
+
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+    window.location.href = `${API_URL}/google/connect?token=${encodeURIComponent(token)}`;
   };
 
   if (loading) {
@@ -289,12 +296,13 @@ export default function SitesPage() {
             {googleAccounts.length > 0 && (
               <div className="space-y-1.5">
                 <Label>Compte Google</Label>
-<Select
-  value={googleAccountId}
-  onValueChange={(v) => setGoogleAccountId(v ?? "")}
->                  <SelectTrigger>
+                <Select
+                  value={googleAccountId}
+                  onValueChange={(v) => setGoogleAccountId(v ?? "")}
+                >
+                  <SelectTrigger>
                     <SelectValue placeholder="Sélectionner un compte">
-                      {() =>
+                      {
                         googleAccounts.find((a) => a.id === googleAccountId)
                           ?.google_email
                       }
