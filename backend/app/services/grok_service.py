@@ -8,20 +8,25 @@ from app.schemas.recommendation import RapportIA
 logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """Tu es un expert SEO. Analyse les données fournies et génère
-un diagnostic avec des recommandations priorisées.
+des recommandations priorisées.
 
-Réponds UNIQUEMENT en JSON valide, avec cette structure exacte :
+IMPORTANT : ta réponse doit être UNIQUEMENT un JSON valide, sans aucun autre texte.
+Pas de markdown, pas de ``` , pas d'introduction.
+
+Structure exacte :
 {
   "diagnostics": [
     {
       "title": "titre court et actionnable",
       "reasoning": "explication détaillée du problème détecté",
-      "severity": "critical | important | opportunity",
-      "estimated_impact": "estimation courte de l'impact, ou null"
+      "severity": "critical",
+      "estimated_impact": "estimation courte de l'impact"
     }
   ]
 }
-Ne renvoie rien d'autre que ce JSON."""
+
+severity doit être exactement l'une de : critical | important | opportunity
+Génère entre 3 et 8 diagnostics en français, basés uniquement sur les données."""
 
 
 def _get_llm_client() -> tuple[OpenAI, str, str]:
@@ -113,31 +118,83 @@ def analyser_donnees_seo_mock(donnees_resumees: dict) -> str:
     return json.dumps({"diagnostics": diagnostics}, ensure_ascii=False)
 
 
+def _extract_message_text(response) -> str:
+    """Récupère le texte utile même si content est vide (modèles reasoning)."""
+    try:
+        msg = response.choices[0].message
+    except (IndexError, AttributeError, TypeError):
+        return ""
+
+    parts: list[str] = []
+
+    content = getattr(msg, "content", None)
+    if content and str(content).strip():
+        parts.append(str(content).strip())
+
+    # Certains SDKs / modèles reasoning
+    for attr in ("reasoning", "reasoning_content", "refusal"):
+        val = getattr(msg, attr, None)
+        if val and str(val).strip():
+            parts.append(str(val).strip())
+
+    # message en dict (selon version openai)
+    if hasattr(msg, "model_dump"):
+        dumped = msg.model_dump()
+        for key in ("content", "reasoning", "reasoning_content"):
+            val = dumped.get(key)
+            if val and str(val).strip() and str(val).strip() not in parts:
+                parts.append(str(val).strip())
+
+    return "\n".join(parts).strip()
+
+
 def analyser_donnees_seo(donnees_resumees: dict) -> str:
     """
-    Appelle le LLM configuré (OpenRouter ox-alpha par défaut, ou xAI).
-    Lève une Exception en cas d'échec.
+    Appelle OpenRouter (ox-alpha) ou xAI.
+    Lève une Exception si pas de texte exploitable.
     """
     client, model, provider = _get_llm_client()
 
-    response = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": json.dumps(donnees_resumees, ensure_ascii=False, default=str),
-            },
-        ],
-        temperature=0.3,
-        max_tokens=2000,
+    user_payload = json.dumps(donnees_resumees, ensure_ascii=False, default=str)
+    # Rappel fort pour les modèles qui digressent
+    user_content = (
+        "Voici les données SEO agrégées (JSON).\n"
+        "Tu DOIS répondre avec UNIQUEMENT un objet JSON valide, "
+        "sans markdown, sans texte avant/après, structure exacte demandée dans le system prompt.\n\n"
+        f"{user_payload}"
     )
 
-    content = response.choices[0].message.content
-    if not content or not str(content).strip():
+    kwargs = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_content},
+        ],
+        "temperature": 0.2,
+        "max_tokens": 4000,
+    }
+
+    # Aide JSON si le provider le supporte (sinon ignoré / erreur → on retire)
+    try:
+        response = client.chat.completions.create(
+            **kwargs,
+            response_format={"type": "json_object"},
+        )
+    except Exception:
+        response = client.chat.completions.create(**kwargs)
+
+    text = _extract_message_text(response)
+    if not text:
+        # Log court pour debug (ne pas logger toute la réponse en prod si sensible)
+        logger.warning(
+            "Réponse LLM sans texte exploitable provider=%s model=%s raw_choices=%s",
+            provider,
+            model,
+            getattr(response, "choices", None),
+        )
         raise RuntimeError(f"Réponse {provider} vide (model={model})")
 
-    return str(content)
+    return text
 
 
 def analyser_donnees_seo_safe(donnees_resumees: dict) -> tuple[str, str]:
@@ -172,19 +229,50 @@ def analyser_donnees_seo_safe(donnees_resumees: dict) -> tuple[str, str]:
 
 
 def parser_reponse_grok(contenu_brut: str) -> RapportIA:
-    """Parse JSON → RapportIA. Fallback mock si parse échoue."""
+    """Parse le JSON même s'il est multiligne ou entouré de texte."""
     try:
         text = (contenu_brut or "").strip()
+
+        # Enlever fences markdown
         fence = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
         if fence:
             text = fence.group(1).strip()
 
-        match = re.search(r"\{.*\}", text, re.DOTALL)
-        if not match:
-            raise ValueError("Aucun JSON trouvé dans la réponse")
+        data = None
 
-        return RapportIA.model_validate_json(match.group(0))
+        # 1) JSON direct
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError:
+            pass
+
+        # 2) Premier objet { ... } (multiligne) via raw_decode
+        if data is None:
+            start = text.find("{")
+            if start == -1:
+                raise ValueError("Aucun JSON trouvé dans la réponse")
+            try:
+                data, _ = json.JSONDecoder().raw_decode(text[start:])
+            except json.JSONDecodeError as e:
+                raise ValueError(f"JSON invalide: {e}") from e
+
+        if not isinstance(data, dict):
+            raise ValueError("La racine JSON n'est pas un objet")
+
+        # Alias éventuel
+        if "diagnostics" not in data and isinstance(data.get("recommendations"), list):
+            data = {"diagnostics": data["recommendations"]}
+
+        if "diagnostics" not in data:
+            raise ValueError("Clé 'diagnostics' absente")
+
+        return RapportIA.model_validate(data)
+
     except Exception as e:
-        logger.warning("Parse LLM échoué (%s) — RapportIA mock minimal", e)
+        logger.warning(
+            "Parse LLM échoué (%s) — aperçu réponse: %s",
+            e,
+            (contenu_brut or "")[:400].replace("\n", " "),
+        )
         mock_json = analyser_donnees_seo_mock({})
         return RapportIA.model_validate_json(mock_json)

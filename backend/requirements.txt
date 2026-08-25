@@ -27,3 +27,4 @@ openai>=1.55.0
 httpx>=0.28.0
 
 python-dotenv>=1.0.1
+aiosmtplib>=3.0.0
