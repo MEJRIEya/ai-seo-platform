@@ -34,6 +34,8 @@ from app.routers.auth_google import router as auth_google_router
 from app.routers.reports import router as reports_router
 from app.routers import billing
 from app.routers.admin import router as admin_router
+from app.core.database import engine, Base
+import app.models 
 
 
 app = FastAPI(
@@ -83,3 +85,10 @@ async def root():
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+
+
+@app.on_event("startup")
+async def startup():
+    async with engine.begin() as conn:
+        # Crée toutes les tables manquantes automatiquement
+        await conn.run_sync(Base.metadata.create_all)
