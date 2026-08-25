@@ -39,6 +39,8 @@ from app.routers.admin import router as admin_router
 
 
 
+
+
 app = FastAPI(
     title="AI SEO Platform",
     description="Plateforme d'analyse SEO avec IA en quasi temps réel",
@@ -47,14 +49,19 @@ app = FastAPI(
 )
 
 # CORS
+origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://ai-seo-platform-zn35.onrender.com",  # Assurez-vous d'inclure votre frontend Render
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 app.include_router(reports_router)
 app.include_router(admin_router)
 
