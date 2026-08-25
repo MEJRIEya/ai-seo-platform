@@ -7,11 +7,6 @@ from app.schemas.recommendation import RapportIA
 
 logger = logging.getLogger(__name__)
 
-client = OpenAI(
-    api_key=settings.XAI_API_KEY or "missing",
-    base_url=settings.XAI_BASE_URL,
-)
-
 SYSTEM_PROMPT = """Tu es un expert SEO. Analyse les données fournies et génère
 un diagnostic avec des recommandations priorisées.
 
@@ -29,11 +24,43 @@ Réponds UNIQUEMENT en JSON valide, avec cette structure exacte :
 Ne renvoie rien d'autre que ce JSON."""
 
 
+def _get_llm_client() -> tuple[OpenAI, str, str]:
+    """
+    Retourne (client, model, provider_name).
+    Priorité : openrouter (ox-alpha) → xai → erreur.
+    """
+    provider = (getattr(settings, "LLM_PROVIDER", None) or "openrouter").lower().strip()
+
+    if provider == "openrouter":
+        api_key = getattr(settings, "OPENROUTER_API_KEY", None) or ""
+        if not api_key:
+            raise RuntimeError("OPENROUTER_API_KEY manquante")
+        base_url = getattr(settings, "OPENROUTER_BASE_URL", None) or "https://openrouter.ai/api/v1"
+        model = getattr(settings, "OPENROUTER_MODEL", None) or "stealth/ox-alpha"
+        client = OpenAI(
+            api_key=api_key,
+            base_url=base_url,
+            default_headers={
+                "HTTP-Referer": getattr(settings, "FRONTEND_URL", "http://localhost:3000"),
+                "X-Title": "AI SEO Platform",
+            },
+        )
+        return client, model, "openrouter"
+
+    if provider == "xai":
+        api_key = getattr(settings, "XAI_API_KEY", None) or ""
+        if not api_key or api_key in ("missing", "your_key", "changez_moi"):
+            raise RuntimeError("XAI_API_KEY manquante ou non configurée")
+        base_url = getattr(settings, "XAI_BASE_URL", None) or "https://api.x.ai/v1"
+        model = getattr(settings, "XAI_MODEL", None) or "grok-4.6"
+        client = OpenAI(api_key=api_key, base_url=base_url)
+        return client, model, "xai"
+
+    raise RuntimeError(f"LLM_PROVIDER inconnu: {provider} (utiliser openrouter|xai)")
+
+
 def analyser_donnees_seo_mock(donnees_resumees: dict) -> str:
-    """
-    Mock intelligent : diagnostics à partir des vraies données agrégées,
-    sans appeler Grok (coût nul).
-    """
+    """Mock intelligent à partir des données agrégées (coût nul)."""
     diagnostics = []
     pages_en_baisse = donnees_resumees.get("pages_en_baisse", []) or []
     mots_cles = donnees_resumees.get("mots_cles_sous_performants", []) or []
@@ -88,14 +115,10 @@ def analyser_donnees_seo_mock(donnees_resumees: dict) -> str:
 
 def analyser_donnees_seo(donnees_resumees: dict) -> str:
     """
-    Appelle l'API Grok (xAI) et retourne le texte brut.
-    Lève une Exception si clé manquante, crédits, timeout, HTTP error, etc.
+    Appelle le LLM configuré (OpenRouter ox-alpha par défaut, ou xAI).
+    Lève une Exception en cas d'échec.
     """
-    api_key = getattr(settings, "XAI_API_KEY", None) or ""
-    if not api_key or api_key in ("missing", "your_key", "changez_moi"):
-        raise RuntimeError("XAI_API_KEY manquante ou non configurée")
-
-    model = getattr(settings, "XAI_MODEL", None) or "grok-2-latest"
+    client, model, provider = _get_llm_client()
 
     response = client.chat.completions.create(
         model=model,
@@ -112,33 +135,34 @@ def analyser_donnees_seo(donnees_resumees: dict) -> str:
 
     content = response.choices[0].message.content
     if not content or not str(content).strip():
-        raise RuntimeError("Réponse Grok vide")
+        raise RuntimeError(f"Réponse {provider} vide (model={model})")
 
     return str(content)
 
 
 def analyser_donnees_seo_safe(donnees_resumees: dict) -> tuple[str, str]:
     """
-    Tente le vrai Grok, sinon fallback mock.
-    Retourne (contenu_brut, source) avec source = "grok" | "mock".
+    Tente le LLM réel, sinon fallback mock.
+    Retourne (contenu_brut, source) avec source = openrouter | xai | mock.
     Ne lève JAMAIS d'exception.
     """
     try:
         text = analyser_donnees_seo(donnees_resumees)
-        logger.info("Grok API OK — source=grok")
-        return text, "grok"
+        provider = (getattr(settings, "LLM_PROVIDER", None) or "openrouter").lower().strip()
+        source = provider if provider in ("openrouter", "xai") else "llm"
+        logger.info("LLM API OK — source=%s", source)
+        return text, source
     except Exception as e:
-        logger.warning("Grok indisponible (%s) — fallback mock", e)
+        logger.warning("LLM indisponible (%s) — fallback mock", e)
         try:
             return analyser_donnees_seo_mock(donnees_resumees or {}), "mock"
         except Exception as e2:
             logger.exception("Mock également en échec: %s", e2)
-            # Ultime secours
             return json.dumps({
                 "diagnostics": [{
                     "title": "Analyse indisponible temporairement",
                     "reasoning": (
-                        "Ni l'API Grok ni le moteur local n'ont pu produire un diagnostic. "
+                        "Ni l'API LLM ni le moteur local n'ont pu produire un diagnostic. "
                         "Réessayez plus tard."
                     ),
                     "severity": "opportunity",
@@ -148,10 +172,7 @@ def analyser_donnees_seo_safe(donnees_resumees: dict) -> tuple[str, str]:
 
 
 def parser_reponse_grok(contenu_brut: str) -> RapportIA:
-    """
-    Extrait et valide le JSON. En cas d'échec, reconstruit un RapportIA
-    minimal pour ne pas faire planter la tâche Celery.
-    """
+    """Parse JSON → RapportIA. Fallback mock si parse échoue."""
     try:
         text = (contenu_brut or "").strip()
         fence = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
@@ -164,6 +185,6 @@ def parser_reponse_grok(contenu_brut: str) -> RapportIA:
 
         return RapportIA.model_validate_json(match.group(0))
     except Exception as e:
-        logger.warning("Parse Grok échoué (%s) — RapportIA mock minimal", e)
+        logger.warning("Parse LLM échoué (%s) — RapportIA mock minimal", e)
         mock_json = analyser_donnees_seo_mock({})
         return RapportIA.model_validate_json(mock_json)

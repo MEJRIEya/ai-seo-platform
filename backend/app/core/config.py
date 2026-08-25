@@ -19,6 +19,12 @@ class Settings(BaseSettings):
     DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:password@localhost:5432/aiseo")
     DATABASE_URL_SYNC: str = os.getenv("DATABASE_URL_SYNC", "postgresql+psycopg2://postgres:password@localhost:5432/aiseo")
 
+
+    LLM_PROVIDER: str = "openrouter"
+    OPENROUTER_API_KEY: str 
+    OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
+    OPENROUTER_MODEL: str = "stealth/ox-alpha"
+
     # xAI
     XAI_API_KEY: str 
     XAI_BASE_URL: str = "https://api.x.ai/v1"
