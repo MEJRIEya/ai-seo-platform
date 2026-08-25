@@ -1,5 +1,6 @@
 import sys
 import os
+from contextlib import asynccontextmanager
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))      # .../ai-seo-platform/backend
 ROOT_DIR = os.path.dirname(BASE_DIR)                        # .../ai-seo-platform
@@ -10,48 +11,47 @@ sys.path.insert(0, ROOT_DIR)
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc
-from uuid import UUID
+from app.core.database import engine, Base
+import app.models  # Charge tous les modèles SQLAlchemy
 
-from app.core.database import get_db
-from app.utils.auth import get_current_user
-from app.models.user import User
-from app.models.site import Site
-from app.models.seo_metric import SeoMetric
-from app.schemas.seo_metric import SeoMetricCreate, SeoMetricRead
-from app.routers import recommendations
+from app.routers import (
+    recommendations,
+    auth,
+    google,
+    site,
+    analytics,
+    auth_google,
+    reports,
+    billing,
+    admin
+)
 from app.routers.core_web_vitals import router as core_web_vitals_router
 
-from app.routers.auth import router as auth_router
-from app.routers.google import router as google_router
 
-from app.routers.site import router as site_router
-from app.routers.analytics import router as analytics_router
-from app.routers import auth_google
-from app.routers.auth_google import router as auth_google_router  
-from app.routers.reports import router as reports_router
-from app.routers import billing
-from app.routers.admin import router as admin_router
-from app.core.database import engine, Base
-import app.models 
+# 1. Définition du Lifespan AVANT l'instanciation de FastAPI
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Les tables sont déjà gérées par Alembic, mais ce bloc assure la compatibilité
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
 
 
+# 2. Instanciation de FastAPI avec lifespan
 app = FastAPI(
     title="AI SEO Platform",
     description="Plateforme d'analyse SEO avec IA en quasi temps réel",
     version="0.1.0",
     docs_url="/docs",
-    lifespan=lifespan,  # Activation du gestionnaire de cycle de vie
+    lifespan=lifespan
 )
 
-# CORS
+# Configuration CORS
 origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "https://ai-seo-platform-zn35.onrender.com",   # Sans slash final (CRUCIAL)
-    "https://ai-seo-platform-zn35.onrender.com/",  # Avec slash au cas où
+    "https://ai-seo-platform-zn35.onrender.com",   # Sans slash final
+    "https://ai-seo-platform-zn35.onrender.com/",  # Avec slash final
 ]
 
 app.add_middleware(
@@ -62,14 +62,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(reports_router)
-app.include_router(admin_router)
-
-app.include_router(auth_router)
-app.include_router(google_router)
-# app.include_router(auth_google_router)
-app.include_router(site_router)
-app.include_router(analytics_router)
+# Routers
+app.include_router(reports.router)
+app.include_router(admin.router)
+app.include_router(auth.router)
+app.include_router(google.router)
+app.include_router(site.router)
+app.include_router(analytics.router)
 app.include_router(recommendations.router)
 app.include_router(core_web_vitals_router)  
 app.include_router(auth_google.router)
@@ -86,28 +85,3 @@ async def root():
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
-
-
-@app.on_event("startup")
-async def startup():
-    async with engine.begin() as conn:
-        # Crée toutes les tables manquantes automatiquement
-        await conn.run_sync(Base.metadata.create_all)
-
-
-from contextlib import asynccontextmanager
-from app.core.database import engine, Base
-
-# Importez vos modèles afin qu'SQLAlchemy les enregistre dans le registre de metadata
-from app.models.user import User  # noqa: F401
-from app.models.site import Site  # noqa: F401
-from app.models.seo_metric import SeoMetric  # noqa: F401
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Création automatique des tables manquantes en BDD
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield
-
