@@ -64,4 +64,4 @@ async def google_login_callback(code: str, state: str, db: AsyncSession = Depend
     access_token = create_access_token(data={"sub": user.email})
 
     # Redirige vers le frontend avec le token (à ajuster selon comment Next.js le récupère)
-    return RedirectResponse(f"http://localhost:3000/auth/callback?token={access_token}")
+return RedirectResponse(f"{settings.FRONTEND_URL}/auth/callback?token={access_token}")
