@@ -31,7 +31,9 @@ celery_app.conf.beat_schedule = {
     },
 }
 
+celery_app.autodiscover_tasks(["app.tasks"])
 # Enregistrement des tasks
 import app.tasks.analytics
 import app.tasks.recommendations
 import app.tasks.core_web_vitals
+import app.tasks.audit  # noqa: F401

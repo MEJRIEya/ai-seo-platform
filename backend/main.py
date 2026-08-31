@@ -26,6 +26,7 @@ from app.routers import (
     admin
 )
 from app.routers.core_web_vitals import router as core_web_vitals_router
+from app.routers.audit import router as audit_router
 
 
 # 1. Définition du Lifespan AVANT l'instanciation de FastAPI
@@ -73,6 +74,8 @@ app.include_router(recommendations.router)
 app.include_router(core_web_vitals_router)  
 app.include_router(auth_google.router)
 app.include_router(billing.router)
+app.include_router(audit_router)
+
 
 
 @app.get("/")

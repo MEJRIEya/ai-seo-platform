@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     GOOGLE_REDIRECT_URI: str
     GOOGLE_LOGIN_REDIRECT_URI: str
     CRUX_API_KEY: str
+    GOOGLE_PSI_API_KEY: str 
 
     STRIPE_SECRET_KEY: str
     STRIPE_PRICE_ID_PRO: str

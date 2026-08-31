@@ -1,10 +1,41 @@
+"use client";
+
 import Link from "next/link";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Footer from "@/components/Footer";
 
 export default function HomePage() {
+  const router = useRouter();
+  const [url, setUrl] = useState("");
+  const [error, setError] = useState("");
+
+  const handleAudit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+
+    const cleaned = url.trim().toLowerCase();
+    if (!cleaned || cleaned.length < 3) {
+      setError("Entrez une URL de site web valide (ex.: example.com)");
+      return;
+    }
+
+    const token =
+      typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    const q = encodeURIComponent(cleaned);
+
+    // Pas connecté → inscription avec l'URL conservée
+    if (!token) {
+      router.push(`/auth/register?url=${q}`);
+      return;
+    }
+
+    // Connecté → page audit HORS dashboard (pas /dashboard/...)
+    router.push(`/audit/start?url=${q}`);
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
-      {/* Header */}
       <header className="sticky top-0 z-50 bg-background/90 backdrop-blur border-b border-border">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-8">
@@ -44,7 +75,6 @@ export default function HomePage() {
       </header>
 
       <div className="flex-1">
-        {/* Hero — dégradé violet / rose / bleu */}
         <section className="relative overflow-hidden">
           <div
             className="absolute inset-0"
@@ -57,47 +87,74 @@ export default function HomePage() {
             <div className="inline-flex items-center gap-2 bg-primary/15 text-primary text-xs font-semibold px-3 py-1.5 rounded-full mb-6 border border-primary/20">
               SEO + GA4 + Search Console + AI
             </div>
+
             <h1 className="text-4xl md:text-6xl font-heading font-bold tracking-tight text-foreground max-w-4xl mx-auto leading-tight">
-              Be found in search.{" "}
-              <span className="text-primary">Get recommended by AI.</span>
+              Audit SEO &amp;{" "}
+              <span className="text-primary">Outil de Visibilité AI</span>
             </h1>
+
             <p className="mt-6 text-lg text-muted-foreground max-w-2xl mx-auto">
-              Connect Google Search Console &amp; Analytics, track positions,
-              generate detailed reports, audit Core Web Vitals, and get
-              AI-powered recommendations to grow your organic visibility.
+              Entrez votre site pour un audit gratuit. Créez un compte, obtenez
+              PageSpeed &amp; SEO on-page, puis connectez GSC &amp; GA4 pour les
+              recommandations avancées.
             </p>
-            <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
+
+            <form
+              onSubmit={handleAudit}
+              className="mt-10 max-w-xl mx-auto flex flex-col sm:flex-row rounded-xl border border-border bg-card shadow-lg shadow-primary/10 overflow-hidden"
+            >
+              <input
+                type="text"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="exemple.com"
+                className="flex-1 px-4 py-3.5 bg-transparent text-foreground placeholder:text-muted-foreground outline-none text-base"
+                aria-label="URL du site à auditer"
+              />
+              <button
+                type="submit"
+                className="bg-primary text-primary-foreground hover:bg-primary/90 font-semibold px-8 py-3.5 transition sm:min-w-[140px]"
+              >
+                Audit
+              </button>
+            </form>
+
+            {error ? (
+              <p className="mt-3 text-sm text-destructive">{error}</p>
+            ) : (
+              <p className="mt-3 text-sm text-muted-foreground">
+                Entrez une URL pour une analyse gratuite · 1 site · 1 audit free
+              </p>
+            )}
+
+            <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link
                 href="/auth/register"
-                className="w-full sm:w-auto text-center bg-primary text-primary-foreground hover:bg-primary/90 font-medium px-8 py-3.5 rounded-xl transition text-base shadow-lg shadow-primary/30"
+                className="w-full sm:w-auto text-center border-2 border-primary/40 bg-card text-primary hover:bg-accent font-medium px-8 py-3 rounded-xl transition text-sm"
               >
-                Start free
+                Créer un compte sans audit
               </Link>
               <Link
                 href="/auth/login"
-                className="w-full sm:w-auto text-center border-2 border-primary/40 bg-card text-primary hover:bg-accent font-medium px-8 py-3.5 rounded-xl transition text-base"
+                className="text-sm font-medium text-muted-foreground hover:text-primary transition"
               >
-                Log in
+                Déjà un compte ? Log in
               </Link>
             </div>
-            <p className="mt-4 text-sm text-muted-foreground">
-              No credit card required · Connect your real GSC &amp; GA4 data
-            </p>
           </div>
         </section>
 
-        {/* Stats colorées */}
         <section className="border-y border-border bg-secondary/80">
           <div className="max-w-7xl mx-auto px-6 py-12 grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
             {[
               {
-                value: "GSC + GA4",
-                label: "Data sources connected",
+                value: "Free audit",
+                label: "PageSpeed + on-page",
                 color: "text-primary",
               },
               {
-                value: "Near real-time",
-                label: "Position tracking",
+                value: "GSC + GA4",
+                label: "Data sources connected",
                 color: "text-[var(--chart-2)]",
               },
               {
@@ -125,7 +182,6 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Features */}
         <section id="features" className="max-w-7xl mx-auto px-6 py-24">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-heading font-bold text-foreground">
@@ -140,27 +196,27 @@ export default function HomePage() {
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[
               {
+                title: "Free Site Audit",
+                desc: "PageSpeed Insights + on-page SEO in one click. One free audit per account.",
+                bar: "bg-primary",
+              },
+              {
                 title: "Position Tracking",
                 desc: "Track keyword rankings over time. See Top 3, Top 10, Top 20 and trends at a glance.",
-                bar: "bg-primary",
+                bar: "bg-[var(--chart-2)]",
               },
               {
                 title: "Keyword Overview",
                 desc: "Analyze clicks, impressions, CTR and position. Find high-impact keywords.",
-                bar: "bg-[var(--chart-2)]",
+                bar: "bg-[var(--chart-3)]",
               },
               {
                 title: "Site Performance",
                 desc: "Unified dashboard for GSC & GA4: traffic, top pages and organic trends.",
-                bar: "bg-[var(--chart-3)]",
-              },
-              {
-                title: "Detailed Reports",
-                desc: "Full reports combining Search Console and Analytics in one place.",
                 bar: "bg-[var(--chart-4)]",
               },
               {
-                title: "Site Audit",
+                title: "Site Audit & CWV",
                 desc: "Monitor Core Web Vitals (LCP, INP, CLS, FCP) with lab and field data.",
                 bar: "bg-success",
               },
@@ -168,21 +224,6 @@ export default function HomePage() {
                 title: "AI Recommendations",
                 desc: "Prioritized actions from your real data — critical, important, opportunity.",
                 bar: "bg-[var(--severity-opportunity)]",
-              },
-              {
-                title: "Domain Overview",
-                desc: "Snapshot of connected sites: tech score, clicks, topics and top pages.",
-                bar: "bg-primary",
-              },
-              {
-                title: "Top Pages",
-                desc: "Merge GSC and GA4 by URL: clicks, sessions, positions and CTR.",
-                bar: "bg-[var(--chart-3)]",
-              },
-              {
-                title: "Quick Wins",
-                desc: "Keywords in positions 4–20 with high impressions and room to grow.",
-                bar: "bg-[var(--chart-2)]",
               },
             ].map((f) => (
               <div
@@ -203,7 +244,6 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* AI section — fond violet */}
         <section
           id="ai"
           className="text-primary-foreground"
@@ -221,29 +261,28 @@ export default function HomePage() {
                 Ask less. Ship more SEO impact.
               </h2>
               <p className="mt-5 text-white/85 text-lg">
-                Our AI reads your Search Console and Analytics data, then
-                generates prioritized recommendations: what to fix, what to
-                optimize, and what can move the needle fastest.
+                After your free audit, unlock AI recommendations and connect
+                Search Console &amp; Analytics for data-driven priorities.
               </p>
               <ul className="mt-8 space-y-3 text-white/90 text-sm">
                 <li className="flex items-start gap-2">
                   <span className="text-white mt-0.5">✓</span>
+                  Free: 1 site · 1 technical audit
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-white mt-0.5">✓</span>
+                  Premium: GSC, GA4, AI recs, more audits
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-white mt-0.5">✓</span>
                   Severity: Critical · Important · Opportunity
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-white mt-0.5">✓</span>
-                  Impact based on your real traffic
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-white mt-0.5">✓</span>
-                  Status: Open · Done · Dismissed
                 </li>
               </ul>
               <Link
                 href="/auth/register"
                 className="inline-block mt-10 bg-white text-primary font-semibold px-6 py-3 rounded-xl hover:bg-white/95 transition shadow-lg"
               >
-                Try AI recommendations
+                Start free audit
               </Link>
             </div>
 
@@ -284,14 +323,13 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* How it works */}
         <section id="how" className="max-w-7xl mx-auto px-6 py-24">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-heading font-bold text-foreground">
               How it works
             </h2>
             <p className="mt-4 text-muted-foreground">
-              From zero to actionable SEO insights in minutes.
+              From URL to actionable SEO insights in minutes.
             </p>
           </div>
 
@@ -299,20 +337,20 @@ export default function HomePage() {
             {[
               {
                 step: "01",
-                title: "Connect Google",
-                desc: "Link Search Console and Google Analytics 4 with secure OAuth.",
+                title: "Enter your domain",
+                desc: "Type your website URL on the homepage and click Audit.",
                 tint: "bg-primary/15 text-primary",
               },
               {
                 step: "02",
-                title: "Import & analyze",
-                desc: "Pull rankings, clicks, sessions and Core Web Vitals from your real data.",
+                title: "Create your account",
+                desc: "Sign up free. Your domain is saved — one free technical audit included.",
                 tint: "bg-[var(--chart-2)]/15 text-[var(--chart-2)]",
               },
               {
                 step: "03",
-                title: "Act with AI",
-                desc: "Get prioritized recommendations and track what you fix over time.",
+                title: "Get your audit",
+                desc: "See PageSpeed, on-page SEO and next steps. Unlock GSC, GA4 & AI with credits.",
                 tint: "bg-[var(--chart-3)]/15 text-[var(--chart-3)]",
               },
             ].map((s) => (
@@ -336,22 +374,24 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* CTA final — violet vif */}
         <section className="bg-primary text-primary-foreground">
           <div className="max-w-7xl mx-auto px-6 py-20 text-center">
             <h2 className="text-3xl md:text-4xl font-heading font-bold">
-              Ready to grow your organic visibility?
+              Ready to audit your site for free?
             </h2>
             <p className="mt-4 text-primary-foreground/85 max-w-xl mx-auto">
-              Connect your data, track positions, get detailed reports, and let
-              AI tell you what to do next.
+              Enter your domain above, create an account, and get your first
+              technical SEO audit in minutes.
             </p>
-            <Link
-              href="/auth/register"
+            <button
+              type="button"
+              onClick={() => {
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
               className="inline-block mt-8 bg-white text-primary font-semibold px-8 py-3.5 rounded-xl hover:bg-white/95 transition shadow-lg"
             >
-              Create your free account
-            </Link>
+              Enter a URL to start
+            </button>
           </div>
         </section>
       </div>

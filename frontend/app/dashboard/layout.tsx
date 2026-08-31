@@ -36,9 +36,7 @@ const toolkits: Toolkit[] = [
       },
       {
         label: "Keyword Research",
-        items: [
-          { name: "Keyword Overview", href: "/dashboard/keywords" },
-        ],
+        items: [{ name: "Keyword Overview", href: "/dashboard/keywords" }],
       },
       {
         label: "AI Insights",
@@ -94,6 +92,13 @@ interface SubscriptionInfo {
   has_used_trial: boolean;
 }
 
+function isPaidPlan(sub: SubscriptionInfo | null): boolean {
+  if (!sub) return false;
+  if (sub.plan === "pro") return true;
+  if (sub.status === "active" || sub.status === "trialing") return true;
+  return false;
+}
+
 export default function DashboardLayout({
   children,
 }: {
@@ -101,10 +106,15 @@ export default function DashboardLayout({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [activeToolkit, setActiveToolkit] = useState(getActiveToolkit(pathname));
+  const [activeToolkit, setActiveToolkit] = useState(
+    getActiveToolkit(pathname)
+  );
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
+  const [subscription, setSubscription] = useState<SubscriptionInfo | null>(
+    null
+  );
+  const [accessChecked, setAccessChecked] = useState(false);
   const [trialLoading, setTrialLoading] = useState(false);
   const [trialError, setTrialError] = useState("");
 
@@ -112,28 +122,61 @@ export default function DashboardLayout({
     setActiveToolkit(getActiveToolkit(pathname));
   }, [pathname]);
 
+  // Auth + garde plan free
   useEffect(() => {
-    const fetchSubscription = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      router.replace("/auth/login");
+      return;
+    }
+
+    let cancelled = false;
+
+    const guard = async () => {
       try {
         const data: SubscriptionInfo = await apiFetch("/billing/subscription");
+        if (cancelled) return;
+
         setSubscription(data);
+
+        const paid = isPaidPlan(data);
+        const onBilling = pathname.startsWith("/dashboard/billing");
+
+        // Free : uniquement billing (pour payer). Le reste de la plateforme est bloqué.
+        if (!paid && !onBilling) {
+          router.replace("/dashboard/billing");
+          return;
+        }
+
+        setAccessChecked(true);
       } catch {
-        // Silencieux
+        if (!cancelled) {
+          localStorage.removeItem("token");
+          router.replace("/auth/login");
+        }
       }
     };
-    fetchSubscription();
-  }, []);
+
+    guard();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname, router]);
 
   const handleStartTrial = async () => {
     setTrialLoading(true);
     setTrialError("");
     try {
-      const data: { checkout_url: string } = await apiFetch("/billing/start-trial", {
-        method: "POST",
-      });
+      const data: { checkout_url: string } = await apiFetch(
+        "/billing/start-trial",
+        { method: "POST" }
+      );
       window.location.href = data.checkout_url;
-    } catch (err: any) {
-      setTrialError(err.message || "Impossible de démarrer l'essai");
+    } catch (err: unknown) {
+      setTrialError(
+        err instanceof Error ? err.message : "Impossible de démarrer l'essai"
+      );
       setTrialLoading(false);
     }
   };
@@ -141,11 +184,22 @@ export default function DashboardLayout({
   const current = toolkits.find((t) => t.id === activeToolkit) || toolkits[0];
 
   const showTrialButton =
-    subscription && subscription.plan === "free" && !subscription.has_used_trial;
+    subscription &&
+    subscription.plan === "free" &&
+    !subscription.has_used_trial;
+
+  // Évite de flash le dashboard SEO avant la redirection free
+  if (!accessChecked) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-background text-muted-foreground text-sm">
+        Vérification de l&apos;accès…
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen flex overflow-hidden bg-background">
-      {/* Icon rail — fixe, surface sombre dédiée indépendante du thème */}
+      {/* Icon rail */}
       <aside className="w-14 h-screen bg-rail flex flex-col items-center py-3 gap-1 shrink-0 z-30">
         <div className="mb-4 w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground text-xs font-bold">
           AI
@@ -172,7 +226,6 @@ export default function DashboardLayout({
                 {tk.name.slice(0, 3).toUpperCase()}
               </button>
 
-              {/* Card au survol */}
               <div className="pointer-events-none absolute left-full top-0 ml-3 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
                 <div className="pointer-events-auto w-56 bg-popover rounded-xl shadow-xl ring-1 ring-foreground/10 py-3">
                   <div className="px-4 pb-2 mb-1 border-b border-border">
@@ -281,58 +334,64 @@ export default function DashboardLayout({
 
       {/* Zone principale */}
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-       <header className="h-14 bg-card border-b border-border flex items-center px-4 md:px-6 justify-between gap-4 shrink-0">
-  <div className="flex items-center gap-2 min-w-0">
-    {!sidebarOpen && (
-      <button
-        onClick={() => setSidebarOpen(true)}
-        className="w-8 h-8 rounded-md border border-border text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center transition shrink-0"
-        title="Show navigation"
-      >
-        »
-      </button>
-    )}
-    <div className="text-sm text-muted-foreground truncate">
-      Home <span className="mx-1">›</span>{" "}
-      <span className="text-foreground">{current.name}</span>
-    </div>
-  </div>
+        <header className="h-14 bg-card border-b border-border flex items-center px-4 md:px-6 justify-between gap-4 shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            {!sidebarOpen && (
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="w-8 h-8 rounded-md border border-border text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center transition shrink-0"
+                title="Show navigation"
+              >
+                »
+              </button>
+            )}
+            <div className="text-sm text-muted-foreground truncate">
+              Home <span className="mx-1">›</span>{" "}
+              <span className="text-foreground">{current.name}</span>
+            </div>
+          </div>
 
-  <div className="flex items-center gap-3 shrink-0">
-    {trialError && (
-      <span className="hidden md:inline text-xs text-destructive">
-        {trialError}
-      </span>
-    )}
+          <div className="flex items-center gap-3 shrink-0">
+            {trialError && (
+              <span className="hidden md:inline text-xs text-destructive">
+                {trialError}
+              </span>
+            )}
 
-    {showTrialButton && (
-      <Button
-        onClick={handleStartTrial}
-        disabled={trialLoading}
-        className="hidden sm:inline-flex bg-success text-success-foreground hover:bg-success/90"
-        size="sm"
-      >
-        {trialLoading ? "Redirecting..." : "Start free trial"}
-      </Button>
-    )}
+            {showTrialButton && (
+              <Button
+                onClick={handleStartTrial}
+                disabled={trialLoading}
+                className="hidden sm:inline-flex bg-success text-success-foreground hover:bg-success/90"
+                size="sm"
+              >
+                {trialLoading ? "Redirecting..." : "Start free trial"}
+              </Button>
+            )}
 
-    {subscription?.plan === "pro" && (
-      <Badge
-        variant="secondary"
-        className="hidden sm:inline-flex bg-success/10 text-success hover:bg-success/10"
-      >
-        {subscription.status === "trialing" ? "Trial active" : "Pro plan"}
-      </Badge>
-    )}
+            {subscription?.plan === "pro" && (
+              <Badge
+                variant="secondary"
+                className="hidden sm:inline-flex bg-success/10 text-success hover:bg-success/10"
+              >
+                {subscription.status === "trialing"
+                  ? "Trial active"
+                  : "Pro plan"}
+              </Badge>
+            )}
 
-    {/* Light / Dark mode */}
-    <ThemeToggle />
+            <ThemeToggle />
 
-    <Button onClick={() => router.push("/dashboard/sites")} size="sm">
-      + Add Site
-    </Button>
-  </div>
-</header>
+            {isPaidPlan(subscription) && (
+              <Button
+                onClick={() => router.push("/dashboard/sites")}
+                size="sm"
+              >
+                + Add Site
+              </Button>
+            )}
+          </div>
+        </header>
 
         <main className="flex-1 overflow-y-auto p-6">{children}</main>
       </div>

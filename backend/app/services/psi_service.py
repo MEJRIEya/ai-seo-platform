@@ -1,26 +1,51 @@
 """
-Service d'accès à l'API PageSpeed Insights (PSI), utilisé en fallback quand
-CrUX n'a pas assez de données réelles (cas fréquent pour les sites à faible trafic).
-
-Contrairement à CrUX (données réelles agrégées d'utilisateurs Chrome), PSI lance
-un test Lighthouse en direct sur l'URL -> fonctionne pour N'IMPORTE QUEL site,
-même sans trafic, mais c'est un test synthétique en labo, pas une mesure réelle,
-et c'est plus lent (quelques secondes par appel).
-
-Doc officielle : https://developers.google.com/speed/docs/insights/v5/get-started
+Service PageSpeed Insights (PSI).
+- obtenir_core_web_vitals_labo : métriques labo (LCP, CLS, FCP, TBT)
+- run_pagespeed : scores + summary pour l'audit free (mobile/desktop)
 """
+from __future__ import annotations
+
+import logging
+from typing import Any
+
 import requests
+
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 PSI_ENDPOINT = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed"
 
-# Mêmes seuils que crux_service.py, réutilisés pour classer les métriques de labo
 SEUILS = {
     "largest-contentful-paint": {"good": 2500, "needs_improvement": 4000},
     "cumulative-layout-shift": {"good": 0.10, "needs_improvement": 0.25},
     "first-contentful-paint": {"good": 1800, "needs_improvement": 3000},
     "total-blocking-time": {"good": 200, "needs_improvement": 600},
 }
+
+
+def _api_key() -> str:
+    """Priorité : GOOGLE_PSI_API_KEY, sinon CRUX_API_KEY (même clé Google souvent)."""
+    key = (
+        getattr(settings, "GOOGLE_PSI_API_KEY", None)
+        or getattr(settings, "CRUX_API_KEY", None)
+        or ""
+    )
+    key = (key or "").strip()
+    if not key:
+        raise RuntimeError(
+            "Aucune clé PSI : définis GOOGLE_PSI_API_KEY ou CRUX_API_KEY dans .env"
+        )
+    return key
+
+
+def _normalize_url(url: str) -> str:
+    url = (url or "").strip()
+    if not url:
+        raise ValueError("URL vide")
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
+    return url
 
 
 def _classer(audit_id: str, valeur: float) -> str:
@@ -35,19 +60,24 @@ def _classer(audit_id: str, valeur: float) -> str:
     return "poor"
 
 
-def obtenir_core_web_vitals_labo(url: str, strategy: str = "mobile") -> dict | None:
-    """
-    Lance un test Lighthouse en direct via PageSpeed Insights et retourne
-    des métriques de performance équivalentes aux Core Web Vitals.
+def _call_psi(
+    url: str,
+    strategy: str = "mobile",
+    categories: list[str] | None = None,
+    timeout: int = 120,
+) -> dict[str, Any]:
+    url = _normalize_url(url)
+    categories = categories or ["performance"]
 
-    Note : Lighthouse ne mesure pas l'INP en conditions de labo (il faut de
-    vraies interactions utilisateur pour ça). On utilise le Total Blocking
-    Time (TBT) comme proxy d'interactivité, mais ce n'est pas la même métrique.
+    # requests : liste de tuples pour répéter "category"
+    params: list[tuple[str, str]] = [
+        ("url", url),
+        ("key", _api_key()),
+        ("strategy", strategy),
+    ]
+    for cat in categories:
+        params.append(("category", cat))
 
-    strategy: "mobile" ou "desktop"
-
-    Retourne None en cas d'échec (site inaccessible, timeout, erreur API...).
-    """
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -55,37 +85,48 @@ def obtenir_core_web_vitals_labo(url: str, strategy: str = "mobile") -> dict | N
         )
     }
 
-    try:
-        response = requests.get(
-            PSI_ENDPOINT,
-            params={
-                "url": url,
-                "key": settings.CRUX_API_KEY,
-                "strategy": strategy,
-                "category": "performance",
-            },
-            headers=headers,
-            timeout=30,  # Lighthouse est lent, on laisse large
+    response = requests.get(
+        PSI_ENDPOINT,
+        params=params,
+        headers=headers,
+        timeout=timeout,
+    )
+    if response.status_code != 200:
+        logger.error(
+            "PSI HTTP %s pour %s: %s",
+            response.status_code,
+            url,
+            response.text[:800],
         )
-        if response.status_code != 200:
-            print(f"PSI a répondu {response.status_code} pour {url}: {response.text[:500]}")
         response.raise_for_status()
-        data = response.json()
-    except requests.exceptions.RequestException as exc:
-        print(f"Erreur lors de l'appel PageSpeed Insights pour {url}: {exc}")
+
+    data = response.json()
+    if "lighthouseResult" not in data:
+        raise RuntimeError(f"Réponse PSI inattendue: {str(data)[:400]}")
+    return data
+
+
+def obtenir_core_web_vitals_labo(url: str, strategy: str = "mobile") -> dict | None:
+    """
+    Test Lighthouse labo → LCP, CLS, FCP, TBT.
+    Retourne None en cas d'échec.
+    """
+    try:
+        data = _call_psi(url, strategy=strategy, categories=["performance"])
+    except Exception as exc:
+        logger.warning("PSI labo échoué pour %s: %s", url, exc)
         return None
 
-    audits = data.get("lighthouseResult", {}).get("audits", {})
+    audits = data.get("lighthouseResult", {}).get("audits", {}) or {}
     if not audits:
         return None
 
-    resultat = {"niveau": "lab", "strategy": strategy}
-
+    resultat: dict[str, Any] = {"niveau": "lab", "strategy": strategy}
     mapping = {
         "largest-contentful-paint": "lcp",
         "cumulative-layout-shift": "cls",
         "first-contentful-paint": "fcp",
-        "total-blocking-time": "tbt",  # proxy d'interactivité, PAS l'INP
+        "total-blocking-time": "tbt",
     }
 
     for audit_id, cle_courte in mapping.items():
@@ -99,3 +140,50 @@ def obtenir_core_web_vitals_labo(url: str, strategy: str = "mobile") -> dict | N
             resultat[f"{cle_courte}_categorie"] = None
 
     return resultat
+
+
+def _extract_summary(data: dict) -> dict:
+    cats = (data.get("lighthouseResult") or {}).get("categories") or {}
+    audits = (data.get("lighthouseResult") or {}).get("audits") or {}
+
+    def score(name: str) -> int | None:
+        c = cats.get(name) or {}
+        s = c.get("score")
+        return int(round(s * 100)) if isinstance(s, (int, float)) else None
+
+    def metric(audit_id: str) -> dict:
+        a = audits.get(audit_id) or {}
+        return {
+            "title": a.get("title"),
+            "display": a.get("displayValue"),
+            "score": a.get("score"),
+            "numeric": a.get("numericValue"),
+        }
+
+    return {
+        "performance": score("performance"),
+        "seo": score("seo"),
+        "accessibility": score("accessibility"),
+        "best_practices": score("best-practices"),
+        "lcp": metric("largest-contentful-paint"),
+        "cls": metric("cumulative-layout-shift"),
+        "inp": metric("interaction-to-next-paint"),
+        "fcp": metric("first-contentful-paint"),
+        "tbt": metric("total-blocking-time"),
+        "final_url": (data.get("lighthouseResult") or {}).get("finalUrl"),
+        "fetch_time": data.get("analysisUTCTimestamp"),
+    }
+
+
+def run_pagespeed(url: str, strategy: str = "mobile") -> dict:
+    """
+    Pour l'audit free (Celery).
+    Retourne {"summary": {...}} — format attendu par app/tasks/audit.py
+    """
+    data = _call_psi(
+        url,
+        strategy=strategy,
+        categories=["performance", "seo"],
+        timeout=180,
+    )
+    return {"summary": _extract_summary(data)}
